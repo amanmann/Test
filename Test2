@@ -52,3 +52,35 @@ def apply_mapping_once_per_key_per_line():
             editor.replaceTarget(line)
 
 apply_mapping_once_per_key_per_line()
+
+
+***************************************
+
+from Npp import *
+
+# Your existing mapping, in the order you defined it
+replacements = {
+    "columnIndex_tFileInputExcel_1_1 = 24": "columnIndex_tFileInputExcel_1_1 = 25",
+    "columnIndex_tFileInputExcel_1_1 = 25": "columnIndex_tFileInputExcel_1_1 = 27",
+    # ... all your hundreds of pairs
+}
+
+def apply_replacements_sequential():
+    text = editor.getText()
+    pos = 0  # where we are in the file
+
+    for old, new in replacements.items():
+        idx = text.find(old, pos)
+        if idx == -1:
+            # old string not found after current position; skip
+            continue
+
+        # Replace this single occurrence
+        text = text[:idx] + new + text[idx + len(old):]
+
+        # Advance pos to just after the newly inserted text
+        pos = idx + len(new)
+
+    editor.setText(text)
+
+apply_replacements_sequential()
