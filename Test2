@@ -84,3 +84,39 @@ def apply_replacements_sequential():
     editor.setText(text)
 
 apply_replacements_sequential()
+
+************************
+
+def apply_replacements_map_outer_line_inner():
+    line_count = editor.getLineCount()
+    line_no = 0  # where we are in the file
+
+    for old, new in replacements.items():
+        # Scan forward in the file until we find a line containing 'old'
+        while line_no < line_count:
+            raw_line = editor.getLine(line_no)
+            line = raw_line.rstrip("\r\n")
+
+            if old in line:
+                # Replace *this* occurrence in this line
+                new_line = line.replace(old, new, 1)
+
+                # Write back the line
+                start_pos = editor.positionFromLine(line_no)
+                end_pos = editor.getLineEndPosition(line_no)
+                editor.setTargetStart(start_pos)
+                editor.setTargetEnd(end_pos)
+                editor.replaceTarget(new_line + "\r\n")
+
+                # Move to the NEXT line for the next map entry
+                line_no += 1
+                break  # go to next (old, new) in the map
+
+            # Not found on this line; advance to next
+            line_no += 1
+
+        # If we ran out of lines, there is nowhere else to search for the remaining map entries
+        if line_no >= line_count:
+            break
+
+apply_replacements_map_outer_line_inner()
