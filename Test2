@@ -1,19 +1,12 @@
-# batch_replace.py
-
 from Npp import *
 
-# 1) Define your replacements here: exact text -> new text
-#    You can generate this section from Scala/Java if needed.
+# 1) Your mapping: exact old text -> new text
 replacements = {
-    # "old text": "new text",
+    # Examples – replace with your real pairs:
     "a = 10;": "a = 30;",
     "a = 20;": "a = 40;",
-    "a = 50;": "a = 70;",
-    # add hundreds more here
+    # ...add all your mappings here
 }
-
-# 2) Decide scope: current document or all open documents
-APPLY_TO_ALL_OPEN_DOCS = False  # set to True if you want all open files
 
 def apply_replacements_to_current():
     text = editor.getText()
@@ -21,18 +14,4 @@ def apply_replacements_to_current():
         text = text.replace(old, new)
     editor.setText(text)
 
-def apply_replacements_to_all_open():
-    current_hwnd = notepad.getCurrentDocIndex(0)
-    doc_count = notepad.getNumberOfFiles()
-    for i in range(doc_count):
-        notepad.activateFile(i)
-        text = editor.getText()
-        for old, new in replacements.items():
-            text = text.replace(old, new)
-        editor.setText(text)
-    notepad.activateFile(current_hwnd)
-
-if APPLY_TO_ALL_OPEN_DOCS:
-    apply_replacements_to_all_open()
-else:
-    apply_replacements_to_current()
+apply_replacements_to_current()
