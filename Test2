@@ -15,3 +15,40 @@ def apply_replacements_to_current():
     editor.setText(text)
 
 apply_replacements_to_current()
+
+
+******************************************************
+
+def apply_mapping_once_per_key_per_line():
+    global mapping
+
+    line_count = editor.getLineCount()
+
+    for line_no in range(line_count):
+        if not mapping:
+            break  # nothing left to apply
+
+        line = editor.getLine(line_no)
+        original_line = line
+
+        # For deterministic behavior, iterate over a fixed list of keys
+        for old in list(mapping.keys()):
+            if old in line:
+                new = mapping[old]
+                line = line.replace(old, new, 1)  # replace first occurrence only
+                # remove mapping so it's not used for later lines
+                del mapping[old]
+                break  # stop after one mapping per line
+
+        if line != original_line:
+            # Replace this line in the buffer
+            start_pos = editor.positionFromLine(line_no)
+            end_pos = editor.getLineEndPosition(line_no)
+            editor.setTargetStart(start_pos)
+            editor.setTargetEnd(end_pos)
+            # ensure trailing newline
+            if not line.endswith("\r\n") and not line.endswith("\n"):
+                line = line.rstrip("\r\n") + "\r\n"
+            editor.replaceTarget(line)
+
+apply_mapping_once_per_key_per_line()
