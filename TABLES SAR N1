@@ -1,72 +1,252 @@
-package com.orchestrator;
-
-public class FieldSpec {
-
-    private String fieldName;
-    private int start;
-    private int width;
-
-    public String getFieldName() {
-        return fieldName;
+{
+  "tables": {
+    "FRNT_EUC_SiouxFalls_Recollector_tbl_BCSA0260_001": {
+      "columns": [
+        {
+          "name": "Batch ID1",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "Batch Id2",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "Batch ID3",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "Adj Type",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "Operator ID",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "Entry Date",
+          "type": "DATETIME2"
+        },
+        {
+          "name": "WOD",
+          "type": "FLOAT"
+        },
+        {
+          "name": "Cassette #",
+          "type": "FLOAT"
+        },
+        {
+          "name": "Direct",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "Loan",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "Report Name",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "Report Date",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "transaction type",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "Cardholder Number",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "Reference Number",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "ICA",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "Amount",
+          "type": "FLOAT"
+        },
+        {
+          "name": "Override",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "Description",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "Tran Date",
+          "type": "DATETIME2"
+        }
+      ]
     }
-
-    public void setFieldName(String fieldName) {
-        this.fieldName = fieldName;
-    }
-
-    public int getStart() {
-        return start;
-    }
-
-    public void setStart(int start) {
-        this.start = start;
-    }
-
-    public int getWidth() {
-        return width;
-    }
-
-    public void setWidth(int width) {
-        this.width = width;
-    }
+  }
 }
 
+*****************************************
 
-**********************************************
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
+import java.io.BufferedReader;
+import java.io.FileNotFoundException;
+import java.io.FileReader;
+import java.io.IOException;
+import java.io.InputStream;
 
-package com.orchestrator;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
 
-import java.util.List;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
-public class ExportSpec {
+public static void loadFileToTable(
+        String filePath,
+        String tableName,
+        Connection connection,
+        String jsonConfigFileName)
+        throws SQLException, IOException {
 
-    private String name;
-    private int recordLength;
-    private List<FieldSpec> fields;
+    // Load JSON configuration from resources
+    InputStream inputStream =
+            MSSQLConnector.class
+                    .getClassLoader()
+                    .getResourceAsStream(jsonConfigFileName);
 
-    public String getName() {
-        return name;
+    if (inputStream == null) {
+        throw new FileNotFoundException(
+                "JSON configuration file not found: "
+                        + jsonConfigFileName);
     }
 
-    public void setName(String name) {
-        this.name = name;
+    ObjectMapper mapper = new ObjectMapper();
+
+    JsonNode rootNode = mapper.readTree(inputStream);
+
+    JsonNode tableConfig =
+            rootNode.path("tables").path(tableName);
+
+    if (tableConfig.isMissingNode()) {
+        throw new IllegalArgumentException(
+                "Table configuration not found for: "
+                        + tableName);
     }
 
-    public int getRecordLength() {
-        return recordLength;
+    JsonNode columns =
+            tableConfig.path("columns");
+
+    int columnCount =
+            columns.size();
+
+
+    /*
+     * Build:
+     *
+     * INSERT INTO tableName
+     * ([Column1], [Column 2], [Column3])
+     * VALUES (?, ?, ?)
+     *
+     * Only change from your previous implementation:
+     * ALL column names are surrounded with [ ].
+     */
+    String insertQuery =
+            "INSERT INTO "
+                    + tableName
+                    + " ("
+                    + IntStream.range(0, columnCount)
+                    .mapToObj(i ->
+                            "["
+                                    + columns
+                                    .get(i)
+                                    .path("name")
+                                    .asText()
+                                    + "]")
+                    .collect(Collectors.joining(","))
+                    + ") VALUES ("
+                    + "?,".repeat(columnCount - 1)
+                    + "?"
+                    + ")";
+
+
+    try (
+            BufferedReader reader =
+                    new BufferedReader(
+                            new FileReader(filePath));
+
+            PreparedStatement pstmt =
+                    connection.prepareStatement(insertQuery)
+    ) {
+
+        String line;
+
+        while ((line = reader.readLine()) != null) {
+
+            /*
+             * Preserve trailing empty values.
+             */
+            String[] values =
+                    line.split("\\|", -1);
+
+
+            if (values.length != columnCount) {
+                throw new IllegalArgumentException(
+                        "Column count mismatch for table: "
+                                + tableName
+                                + ". Expected "
+                                + columnCount
+                                + " but found "
+                                + values.length);
+            }
+
+
+            for (int i = 0; i < columnCount; i++) {
+
+                JsonNode column =
+                        columns.get(i);
+
+                String type =
+                        column
+                                .path("type")
+                                .asText()
+                                .toUpperCase();
+
+                String value =
+                        values[i] == null
+                                ? ""
+                                : values[i].trim();
+
+
+                if (value.isEmpty()) {
+
+                    pstmt.setNull(
+                            i + 1,
+                            getSqlType(type));
+
+                } else {
+
+                    setPreparedStatementValue(
+                            pstmt,
+                            i + 1,
+                            value,
+                            type);
+                }
+            }
+
+
+            pstmt.addBatch();
+        }
+
+
+        pstmt.executeBatch();
     }
 
-    public void setRecordLength(int recordLength) {
-        this.recordLength = recordLength;
-    }
 
-    public List<FieldSpec> getFields() {
-        return fields;
-    }
-
-    public void setFields(List<FieldSpec> fields) {
-        this.fields = fields;
-    }
+    System.out.println(
+            "File data loaded into table: "
+                    + tableName);
 }
-
