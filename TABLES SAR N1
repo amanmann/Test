@@ -1,103 +1,380 @@
-{
-  "name": "ManRecSpec",
-  "recordLength": 853,
-  "fields": [
-    { "fieldName": "MMO", "start": 1, "width": 1 },
-    { "fieldName": "Delim1", "start": 2, "width": 1 },
-    { "fieldName": "Priority", "start": 3, "width": 2 },
-    { "fieldName": "Delim2", "start": 5, "width": 1 },
-    { "fieldName": "State", "start": 6, "width": 2 },
-    { "fieldName": "Delim3", "start": 8, "width": 1 },
-    { "fieldName": "ClerkID", "start": 9, "width": 3 },
-    { "fieldName": "Delim4", "start": 12, "width": 1 },
-    { "fieldName": "CountryCode", "start": 13, "width": 3 },
-    { "fieldName": "Delim5", "start": 16, "width": 1 },
-    { "fieldName": "Currency", "start": 17, "width": 3 },
-    { "fieldName": "Delim6", "start": 20, "width": 1 },
-    { "fieldName": "EqCurrency", "start": 21, "width": 3 },
-    { "fieldName": "Delim7", "start": 24, "width": 1 },
-    { "fieldName": "Reason", "start": 25, "width": 3 },
-    { "fieldName": "Delim8", "start": 28, "width": 1 },
+import com.fasterxml.jackson.databind.ObjectMapper;
 
-    { "fieldName": "PageNumber", "start": 29, "width": 5 },
-    { "fieldName": "Delim9", "start": 34, "width": 1 },
-    { "fieldName": "Statement", "start": 35, "width": 5 },
-    { "fieldName": "Delim10", "start": 40, "width": 1 },
-    { "fieldName": "Branch", "start": 41, "width": 7 },
-    { "fieldName": "Delim11", "start": 48, "width": 1 },
-    { "fieldName": "PayeeNum", "start": 49, "width": 9 },
-    { "fieldName": "Delim12", "start": 58, "width": 1 },
-    { "fieldName": "TaxID", "start": 59, "width": 9 },
-    { "fieldName": "Delim13", "start": 68, "width": 1 },
-    { "fieldName": "Location", "start": 69, "width": 10 },
-    { "fieldName": "Delim14", "start": 79, "width": 1 },
-    { "fieldName": "RefNum", "start": 80, "width": 10 },
-    { "fieldName": "Delim15", "start": 90, "width": 1 },
-    { "fieldName": "RepSerialNum", "start": 91, "width": 10 },
-    { "fieldName": "Delim16", "start": 101, "width": 1 },
+import java.io.BufferedWriter;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.InputStream;
 
-    { "fieldName": "SerialNumber", "start": 102, "width": 10 },
-    { "fieldName": "Delim17", "start": 112, "width": 1 },
-    { "fieldName": "DCIP", "start": 113, "width": 10 },
-    { "fieldName": "Delim18", "start": 123, "width": 1 },
-    { "fieldName": "Zip", "start": 124, "width": 10 },
-    { "fieldName": "Delim19", "start": 134, "width": 1 },
-    { "fieldName": "CustAcctNum", "start": 135, "width": 15 },
-    { "fieldName": "Delim20", "start": 150, "width": 1 },
-    { "fieldName": "ImageCode", "start": 151, "width": 15 },
-    { "fieldName": "Delim21", "start": 166, "width": 1 },
-    { "fieldName": "CPCS", "start": 167, "width": 17 },
-    { "fieldName": "Delim22", "start": 184, "width": 1 },
-    { "fieldName": "UserText1", "start": 185, "width": 25 },
-    { "fieldName": "Delim23", "start": 210, "width": 1 },
-    { "fieldName": "UserText2", "start": 211, "width": 25 },
-    { "fieldName": "Delim24", "start": 236, "width": 1 },
+import java.sql.CallableStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 
-    { "fieldName": "Addr1", "start": 237, "width": 35 },
-    { "fieldName": "Delim25", "start": 272, "width": 1 },
-    { "fieldName": "Addr2", "start": 273, "width": 35 },
-    { "fieldName": "Delim26", "start": 308, "width": 1 },
-    { "fieldName": "City", "start": 309, "width": 35 },
-    { "fieldName": "Delim27", "start": 344, "width": 1 },
-    { "fieldName": "Name1", "start": 345, "width": 35 },
-    { "fieldName": "Delim28", "start": 380, "width": 1 },
-    { "fieldName": "Name2", "start": 381, "width": 35 },
-    { "fieldName": "Delim29", "start": 416, "width": 1 },
-    { "fieldName": "Account", "start": 417, "width": 50 },
-    { "fieldName": "Delim30", "start": 467, "width": 1 },
-    { "fieldName": "Company", "start": 468, "width": 50 },
-    { "fieldName": "Delim31", "start": 518, "width": 1 },
-    { "fieldName": "Class", "start": 519, "width": 50 },
-    { "fieldName": "Delim32", "start": 569, "width": 1 },
-    { "fieldName": "Department", "start": 570, "width": 50 },
-    { "fieldName": "Delim33", "start": 620, "width": 1 },
+import java.util.Arrays;
 
-    { "fieldName": "Amount", "start": 621, "width": 20 },
-    { "fieldName": "Delim34", "start": 641, "width": 1 },
-    { "fieldName": "EqAmount", "start": 642, "width": 20 },
-    { "fieldName": "Delim35", "start": 662, "width": 1 },
-    { "fieldName": "UserAmount1", "start": 663, "width": 20 },
-    { "fieldName": "Delim36", "start": 683, "width": 1 },
-    { "fieldName": "AmountRecov", "start": 684, "width": 20 },
-    { "fieldName": "Delim37", "start": 704, "width": 1 },
-    { "fieldName": "AvgRate", "start": 705, "width": 20 },
-    { "fieldName": "Delim38", "start": 725, "width": 1 },
-    { "fieldName": "Aged", "start": 726, "width": 20 },
-    { "fieldName": "Delim39", "start": 746, "width": 1 },
-    { "fieldName": "DaysRecovered", "start": 747, "width": 20 },
-    { "fieldName": "Delim40", "start": 767, "width": 1 },
-    { "fieldName": "UserNum1", "start": 768, "width": 20 },
-    { "fieldName": "Delim41", "start": 788, "width": 1 },
-    { "fieldName": "UserNum2", "start": 789, "width": 20 },
-    { "fieldName": "Delim42", "start": 809, "width": 1 },
+public void writeStoredProcedureOutputToFile(
+        String procedureName,
+        String outputFilePath,
+        String specFileName,
+        Object... params) throws SQLException, IOException {
 
-    { "fieldName": "AvailOrPaid", "start": 810, "width": 10 },
-    { "fieldName": "Delim43", "start": 820, "width": 1 },
-    { "fieldName": "EffectiveDate", "start": 821, "width": 10 },
-    { "fieldName": "Delim44", "start": 831, "width": 1 },
-    { "fieldName": "PostedOrIssue", "start": 832, "width": 10 },
-    { "fieldName": "Delim45", "start": 842, "width": 1 },
-    { "fieldName": "EqDate", "start": 843, "width": 10 },
-    { "fieldName": "Delim46", "start": 853, "width": 1 }
-  ]
+    /*
+     * Load the required export spec from src/main/resources.
+     *
+     * Example:
+     * man_rec_spec.json
+     */
+    ObjectMapper objectMapper = new ObjectMapper();
+
+    ExportSpec spec;
+
+    try (InputStream inputStream =
+                 getClass()
+                         .getClassLoader()
+                         .getResourceAsStream(specFileName)) {
+
+        if (inputStream == null) {
+            throw new IOException(
+                    "Spec file not found in src/main/resources: "
+                            + specFileName);
+        }
+
+        spec = objectMapper.readValue(
+                inputStream,
+                ExportSpec.class);
+    }
+
+
+    /*
+     * Build stored procedure call.
+     *
+     * Example:
+     * {CALL dbo.myProcedure(?,?,?)}
+     */
+    StringBuilder callQuery =
+            new StringBuilder(
+                    "{CALL " + procedureName + "(");
+
+    for (int i = 0; i < params.length; i++) {
+
+        callQuery.append("?");
+
+        if (i < params.length - 1) {
+            callQuery.append(",");
+        }
+    }
+
+    callQuery.append(")}");
+
+
+    /*
+     * Execute stored procedure and write formatted file.
+     */
+    try (
+            CallableStatement stmt =
+                    connection.prepareCall(
+                            callQuery.toString());
+
+            BufferedWriter writer =
+                    new BufferedWriter(
+                            new FileWriter(outputFilePath))
+    ) {
+
+        /*
+         * Set SP parameters.
+         */
+        for (int i = 0; i < params.length; i++) {
+            stmt.setObject(i + 1, params[i]);
+        }
+
+
+        boolean hasResults = stmt.execute();
+
+        boolean recordWritten = false;
+
+
+        /*
+         * Handle stored procedures that may return
+         * update counts before/after ResultSets.
+         */
+        while (true) {
+
+            if (hasResults) {
+
+                try (ResultSet rs =
+                             stmt.getResultSet()) {
+
+                    while (rs.next()) {
+
+                        recordWritten = true;
+
+
+                        /*
+                         * Create one completely blank record
+                         * using the record length from the spec.
+                         *
+                         * For ManRecSpec this will be 853.
+                         */
+                        char[] outputRecord =
+                                new char[
+                                        spec.getRecordLength()];
+
+                        Arrays.fill(
+                                outputRecord,
+                                ' ');
+
+
+                        /*
+                         * Build the output record according
+                         * to the selected JSON spec.
+                         */
+                        for (FieldSpec field :
+                                spec.getFields()) {
+
+                            String value;
+
+                            try {
+
+                                /*
+                                 * Get the value by COLUMN NAME,
+                                 * not ResultSet column position.
+                                 *
+                                 * This is important because the
+                                 * JSON spec controls the output.
+                                 */
+                                value =
+                                        rs.getString(
+                                                field.getFieldName());
+
+                            } catch (SQLException ex) {
+
+                                throw new SQLException(
+                                        "Column '"
+                                                + field.getFieldName()
+                                                + "' defined in "
+                                                + specFileName
+                                                + " was not returned by stored procedure "
+                                                + procedureName,
+                                        ex);
+                            }
+
+
+                            /*
+                             * Null becomes blank.
+                             */
+                            if (value == null) {
+                                value = "";
+                            }
+
+
+                            /*
+                             * Width defined by Access spec.
+                             */
+                            int width =
+                                    field.getWidth();
+
+
+                            /*
+                             * Prevent a value from overflowing
+                             * into the next field.
+                             */
+                            if (value.length() > width) {
+
+                                value =
+                                        value.substring(
+                                                0,
+                                                width);
+                            }
+
+
+                            /*
+                             * Access Start positions are 1-based.
+                             *
+                             * Java arrays are 0-based.
+                             *
+                             * Therefore:
+                             *
+                             * Access Start 1 -> Java index 0
+                             * Access Start 2 -> Java index 1
+                             * etc.
+                             */
+                            int startIndex =
+                                    field.getStart() - 1;
+
+
+                            /*
+                             * Safety check for an invalid spec.
+                             */
+                            if (startIndex < 0
+                                    || startIndex + width
+                                    > outputRecord.length) {
+
+                                throw new IOException(
+                                        "Invalid field position in "
+                                                + specFileName
+                                                + ": "
+                                                + field.getFieldName()
+                                                + " start="
+                                                + field.getStart()
+                                                + ", width="
+                                                + field.getWidth());
+                            }
+
+
+                            /*
+                             * Place the actual value at the exact
+                             * position defined by the spec.
+                             *
+                             * Anything remaining in the field
+                             * stays as spaces because outputRecord
+                             * was initialized with spaces.
+                             */
+                            for (int i = 0;
+                                 i < value.length();
+                                 i++) {
+
+                                outputRecord[
+                                        startIndex + i]
+                                        =
+                                        value.charAt(i);
+                            }
+                        }
+
+
+                        /*
+                         * Write completed formatted record.
+                         */
+                        writer.write(outputRecord);
+
+                        writer.newLine();
+                    }
+                }
+
+            } else {
+
+                int updateCount =
+                        stmt.getUpdateCount();
+
+
+                /*
+                 * -1 means there are no more results
+                 * or update counts.
+                 */
+                if (updateCount == -1) {
+                    break;
+                }
+            }
+
+
+            /*
+             * Move to next SP result.
+             */
+            hasResults =
+                    stmt.getMoreResults();
+        }
+
+
+        /*
+         * SAR N1 Access behaviour:
+         *
+         * If nothing was returned, write this instead
+         * of creating an empty file.
+         */
+        if (!recordWritten) {
+
+            writer.write(
+                    "There is no activity");
+
+            writer.newLine();
+        }
+
+
+        writer.flush();
+    }
+
+
+    System.out.println(
+            "Stored procedure output written to file: "
+                    + outputFilePath
+                    + " using spec: "
+                    + specFileName);
 }
+
+
+
+
+********************************************
+package com.orchestrator;
+
+public class FieldSpec {
+
+    private String fieldName;
+    private int start;
+    private int width;
+
+    public String getFieldName() {
+        return fieldName;
+    }
+
+    public void setFieldName(String fieldName) {
+        this.fieldName = fieldName;
+    }
+
+    public int getStart() {
+        return start;
+    }
+
+    public void setStart(int start) {
+        this.start = start;
+    }
+
+    public int getWidth() {
+        return width;
+    }
+
+    public void setWidth(int width) {package com.orchestrator;
+
+import java.util.List;
+
+public class ExportSpec {
+
+    private String name;
+    private int recordLength;
+    private List<FieldSpec> fields;
+
+    public String getName() {
+        return name;
+    }
+
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    public int getRecordLength() {
+        return recordLength;
+    }
+
+    public void setRecordLength(int recordLength) {
+        this.recordLength = recordLength;
+    }
+
+    public List<FieldSpec> getFields() {
+        return fields;
+    }
+
+    public void setFields(List<FieldSpec> fields) {
+        this.fields = fields;
+    }
+}
+        this.width = width;
+    }
+}
+
+********************************************************************
+
+connector.writeStoredProcedureOutputToFile(
+        "dbo.yourSarN1StoredProcedure",
+        outputFilePath,
+        "man_rec_spec.json",
+        param1,
+        param2
+);
