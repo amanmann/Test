@@ -1,0 +1,85 @@
+/* =========================================================
+   1. tlkpTransactionType
+   ========================================================= */
+CREATE TABLE dbo.tlkpTransactionType
+(
+    [TranTypeCode] VARCHAR(3)   NOT NULL,
+    [TranTypeDesc] VARCHAR(150) NULL,
+    [SDCIAcctPart] VARCHAR(255) NULL,
+    [SDCLAcctPart] VARCHAR(50)  NULL,
+    [SDSCAcctPart] VARCHAR(50)  NULL,
+    [DCIP]         VARCHAR(50)  NULL,
+
+    CONSTRAINT PK_tlkpTransactionType
+        PRIMARY KEY ([TranTypeCode])
+);
+
+
+/* =========================================================
+   2. Access: tbl_BCS_0260-001
+      MSSQL : tbl_BCS_0260_001
+   ========================================================= */
+CREATE TABLE dbo.tbl_BCS_0260_001
+(
+    [TranType] VARCHAR(30) NULL,
+    [BatchID]  VARCHAR(9)  NULL,
+    [EFDate]   DATETIME2   NULL,
+    [Amt]      FLOAT(53)   NULL,
+    [count]    FLOAT(53)   NULL
+);
+
+
+/* =========================================================
+   3. Access: tbl_BCSA0260-001
+      MSSQL : tbl_BCSA0260_001
+   ========================================================= */
+CREATE TABLE dbo.tbl_BCSA0260_001
+(
+    [Batch ID1]         VARCHAR(2)  NULL,
+    [batch Id2]         VARCHAR(2)  NULL,
+    [Batch ID3]         VARCHAR(5)  NULL,
+    [Adj Type]          VARCHAR(5)  NULL,
+    [Operator ID]       VARCHAR(7)  NULL,
+    [Entry Date]        DATETIME2   NULL,
+    [WOD]               FLOAT(53)   NULL,
+    [Cassette #]        FLOAT(53)   NULL,
+    [Direct]            VARCHAR(1)  NULL,
+    [Loan]              VARCHAR(1)  NULL,
+    [Report Name]       VARCHAR(8)  NULL,
+    [Report Date]       VARCHAR(13) NULL,
+    [transaction type]  VARCHAR(42) NULL,
+    [Cardholder Number] VARCHAR(16) NULL,
+    [Reference Number]  VARCHAR(14) NULL,
+    [ICA]               VARCHAR(7)  NULL,
+    [Amount]            FLOAT(53)   NULL,
+    [Override]          VARCHAR(8)  NULL,
+    [Description]       VARCHAR(34) NULL,
+    [Tran Date]         DATETIME2   NULL
+);
+
+
+/* =========================================================
+   4. tlkpBCSA02620_DCIP
+   Composite Primary Key
+   ========================================================= */
+CREATE TABLE dbo.tlkpBCSA02620_DCIP
+(
+    [TranType] VARCHAR(50) NOT NULL,
+    [DCIP]     VARCHAR(50) NOT NULL,
+
+    CONSTRAINT PK_tlkpBCSA02620_DCIP
+        PRIMARY KEY ([TranType], [DCIP])
+);
+
+
+/* =========================================================
+   5. Access: tbl_BCOARB7S-001
+      MSSQL : tbl_BCOARB7S_001
+   ========================================================= */
+CREATE TABLE dbo.tbl_BCOARB7S_001
+(
+    [Source_Code] FLOAT(53)   NULL,
+    [Source_name] VARCHAR(20) NULL,
+    [Efdt]        DATETIME2   NULL,
+    [Amt_Due]     FLOAT(53)   NULL
+);
