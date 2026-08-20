@@ -1,125 +1,69 @@
-/* =========================================================
-   1. tlkpTransactionType
-   ========================================================= */
-CREATE TABLE dbo.tlkpTransactionType
-(
-    [TranTypeCode] VARCHAR(3)   NOT NULL,
-    [TranTypeDesc] VARCHAR(150) NULL,
-    [SDCIAcctPart] VARCHAR(255) NULL,
-    [SDCLAcctPart] VARCHAR(50)  NULL,
-    [SDSCAcctPart] VARCHAR(50)  NULL,
-    [DCIP]         VARCHAR(50)  NULL,
+import java.io.BufferedWriter;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.sql.CallableStatement;
+import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
+import java.sql.SQLException;
 
-    CONSTRAINT PK_tlkpTransactionType
-        PRIMARY KEY ([TranTypeCode])
-);
+public void writeStoredProcedureOutputToFile(
+        String procedureName,
+        String outputFilePath,
+        Object... params) throws SQLException, IOException {
 
+    StringBuilder callQuery = new StringBuilder("{CALL " + procedureName + "(");
 
-/* =========================================================
-   2. Access: tbl_BCS_0260-001
-      MSSQL : tbl_BCS_0260_001
-   ========================================================= */
-CREATE TABLE dbo.tbl_BCS_0260_001
-(
-    [TranType] VARCHAR(30) NULL,
-    [BatchID]  VARCHAR(9)  NULL,
-    [EFDate]   DATETIME2   NULL,
-    [Amt]      FLOAT(53)   NULL,
-    [count]    FLOAT(53)   NULL
-);
+    for (int i = 0; i < params.length; i++) {
+        callQuery.append("?");
+        if (i < params.length - 1) {
+            callQuery.append(",");
+        }
+    }
 
+    callQuery.append(")}");
 
-/* =========================================================
-   3. Access: tbl_BCSA0260-001
-      MSSQL : tbl_BCSA0260_001
-   ========================================================= */
-CREATE TABLE dbo.tbl_BCSA0260_001
-(
-    [Batch ID1]         VARCHAR(2)  NULL,
-    [batch Id2]         VARCHAR(2)  NULL,
-    [Batch ID3]         VARCHAR(5)  NULL,
-    [Adj Type]          VARCHAR(5)  NULL,
-    [Operator ID]       VARCHAR(7)  NULL,
-    [Entry Date]        DATETIME2   NULL,
-    [WOD]               FLOAT(53)   NULL,
-    [Cassette #]        FLOAT(53)   NULL,
-    [Direct]            VARCHAR(1)  NULL,
-    [Loan]              VARCHAR(1)  NULL,
-    [Report Name]       VARCHAR(8)  NULL,
-    [Report Date]       VARCHAR(13) NULL,
-    [transaction type]  VARCHAR(42) NULL,
-    [Cardholder Number] VARCHAR(16) NULL,
-    [Reference Number]  VARCHAR(14) NULL,
-    [ICA]               VARCHAR(7)  NULL,
-    [Amount]            FLOAT(53)   NULL,
-    [Override]          VARCHAR(8)  NULL,
-    [Description]       VARCHAR(34) NULL,
-    [Tran Date]         DATETIME2   NULL
-);
+    try (CallableStatement stmt = connection.prepareCall(callQuery.toString());
+         BufferedWriter writer = new BufferedWriter(new FileWriter(outputFilePath))) {
 
+        // Set SP parameters, if there are any
+        for (int i = 0; i < params.length; i++) {
+            stmt.setObject(i + 1, params[i]);
+        }
 
-/* =========================================================
-   4. tlkpBCSA02620_DCIP
-   Composite Primary Key
-   ========================================================= */
-CREATE TABLE dbo.tlkpBCSA02620_DCIP
-(
-    [TranType] VARCHAR(50) NOT NULL,
-    [DCIP]     VARCHAR(50) NOT NULL,
+        boolean hasResults = stmt.execute();
 
-    CONSTRAINT PK_tlkpBCSA02620_DCIP
-        PRIMARY KEY ([TranType], [DCIP])
-);
+        // Handles both update counts and result sets.
+        while (true) {
+            if (hasResults) {
+                try (ResultSet rs = stmt.getResultSet()) {
+                    ResultSetMetaData metaData = rs.getMetaData();
+                    int columnCount = metaData.getColumnCount();
 
+                    // No column headers.
+                    // No commas added by Java.
+                    // The SP-provided Delim1...Delim46 values supply '|'.
+                    while (rs.next()) {
+                        for (int i = 1; i <= columnCount; i++) {
+                            String value = rs.getString(i);
+                            writer.write(value == null ? "" : value);
+                        }
+                        writer.newLine();
+                    }
+                }
+            } else {
+                int updateCount = stmt.getUpdateCount();
 
-/* =========================================================
-   5. Access: tbl_BCOARB7S-001
-      MSSQL : tbl_BCOARB7S_001
-   ========================================================= */
-CREATE TABLE dbo.tbl_BCOARB7S_001
-(
-    [Source_Code] FLOAT(53)   NULL,
-    [Source_name] VARCHAR(20) NULL,
-    [Efdt]        DATETIME2   NULL,
-    [Amt_Due]     FLOAT(53)   NULL
-);
+                // No further result set or update count exists.
+                if (updateCount == -1) {
+                    break;
+                }
+            }
 
+            hasResults = stmt.getMoreResults();
+        }
 
+        writer.flush();
+    }
 
-ADD DATA :-
-1)
-INSERT INTO dbo.tlkpTransactionType
-(
-    [TranTypeCode],
-    [TranTypeDesc],
-    [SDCIAcctPart],
-    [SDCLAcctPart],
-    [SDSCAcctPart],
-    [DCIP]
-)
-VALUES
-    ('CAD', 'CASH ADVANCES',                  '0665', '0415', '0660', 'Credit'),
-    ('CAW', 'CASH ADVANCE WAIVE FEE',         '0665', '0415', '0660', 'Credit'),
-    ('CRC', 'CREDIT - CASH ADVANCE',           '0415', '0415', '0420', 'Debit'),
-    ('CRP', 'CREDIT - PURCHASES',              '0415', '0415', '0420', 'Debit'),
-    ('PAD', 'PAYMENT (OVERIDE/DESCRIPTION)',   '0415', '0415', '0420', 'Debit'),
-    ('PAY', 'PAYMENTS',                        '0415', '0415', '0420', 'Debit'),
-    ('PUR', 'PURCHASES',                       '0665', '0415', '0660', 'Credit'),
-    ('RTC', 'RETURNS',                         '0665', '0415', '0660', 'Credit');
-
-2) 
-INSERT INTO dbo.tlkpBCSA02620_DCIP
-(
-    [TranType],
-    [DCIP]
-)
-VALUES
-    ('CASH ADVANCE WAIVE FEE',       'Debit'),
-    ('CASH ADVANCES',                'Credit'),
-    ('CREDIT - CASH ADVANCE',        'Debit'),
-    ('CREDIT - PURCHASES',           'Debit'),
-    ('DEBITS',                       'Credit'),
-    ('PAYMENT (OVERIDE/DESCRIPTION)','Debit'),
-    ('PAYMENTS',                     'Debit'),
-    ('PURCHASES',                    'Credit'),
-    ('RETURNS',                      'Debit');
+    System.out.println("Stored procedure output written to file: " + outputFilePath);
+}
