@@ -83,3 +83,43 @@ CREATE TABLE dbo.tbl_BCOARB7S_001
     [Efdt]        DATETIME2   NULL,
     [Amt_Due]     FLOAT(53)   NULL
 );
+
+
+
+ADD DATA :-
+1)
+INSERT INTO dbo.tlkpTransactionType
+(
+    [TranTypeCode],
+    [TranTypeDesc],
+    [SDCIAcctPart],
+    [SDCLAcctPart],
+    [SDSCAcctPart],
+    [DCIP]
+)
+VALUES
+    ('CAD', 'CASH ADVANCES',                  '0665', '0415', '0660', 'Credit'),
+    ('CAW', 'CASH ADVANCE WAIVE FEE',         '0665', '0415', '0660', 'Credit'),
+    ('CRC', 'CREDIT - CASH ADVANCE',           '0415', '0415', '0420', 'Debit'),
+    ('CRP', 'CREDIT - PURCHASES',              '0415', '0415', '0420', 'Debit'),
+    ('PAD', 'PAYMENT (OVERIDE/DESCRIPTION)',   '0415', '0415', '0420', 'Debit'),
+    ('PAY', 'PAYMENTS',                        '0415', '0415', '0420', 'Debit'),
+    ('PUR', 'PURCHASES',                       '0665', '0415', '0660', 'Credit'),
+    ('RTC', 'RETURNS',                         '0665', '0415', '0660', 'Credit');
+
+2) 
+INSERT INTO dbo.tlkpBCSA02620_DCIP
+(
+    [TranType],
+    [DCIP]
+)
+VALUES
+    ('CASH ADVANCE WAIVE FEE',       'Debit'),
+    ('CASH ADVANCES',                'Credit'),
+    ('CREDIT - CASH ADVANCE',        'Debit'),
+    ('CREDIT - PURCHASES',           'Debit'),
+    ('DEBITS',                       'Credit'),
+    ('PAYMENT (OVERIDE/DESCRIPTION)','Debit'),
+    ('PAYMENTS',                     'Debit'),
+    ('PURCHASES',                    'Credit'),
+    ('RETURNS',                      'Debit');
