@@ -1,69 +1,103 @@
-import java.io.BufferedWriter;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.sql.CallableStatement;
-import java.sql.ResultSet;
-import java.sql.ResultSetMetaData;
-import java.sql.SQLException;
+{
+  "name": "ManRecSpec",
+  "recordLength": 853,
+  "fields": [
+    { "fieldName": "MMO", "start": 1, "width": 1 },
+    { "fieldName": "Delim1", "start": 2, "width": 1 },
+    { "fieldName": "Priority", "start": 3, "width": 2 },
+    { "fieldName": "Delim2", "start": 5, "width": 1 },
+    { "fieldName": "State", "start": 6, "width": 2 },
+    { "fieldName": "Delim3", "start": 8, "width": 1 },
+    { "fieldName": "ClerkID", "start": 9, "width": 3 },
+    { "fieldName": "Delim4", "start": 12, "width": 1 },
+    { "fieldName": "CountryCode", "start": 13, "width": 3 },
+    { "fieldName": "Delim5", "start": 16, "width": 1 },
+    { "fieldName": "Currency", "start": 17, "width": 3 },
+    { "fieldName": "Delim6", "start": 20, "width": 1 },
+    { "fieldName": "EqCurrency", "start": 21, "width": 3 },
+    { "fieldName": "Delim7", "start": 24, "width": 1 },
+    { "fieldName": "Reason", "start": 25, "width": 3 },
+    { "fieldName": "Delim8", "start": 28, "width": 1 },
 
-public void writeStoredProcedureOutputToFile(
-        String procedureName,
-        String outputFilePath,
-        Object... params) throws SQLException, IOException {
+    { "fieldName": "PageNumber", "start": 29, "width": 5 },
+    { "fieldName": "Delim9", "start": 34, "width": 1 },
+    { "fieldName": "Statement", "start": 35, "width": 5 },
+    { "fieldName": "Delim10", "start": 40, "width": 1 },
+    { "fieldName": "Branch", "start": 41, "width": 7 },
+    { "fieldName": "Delim11", "start": 48, "width": 1 },
+    { "fieldName": "PayeeNum", "start": 49, "width": 9 },
+    { "fieldName": "Delim12", "start": 58, "width": 1 },
+    { "fieldName": "TaxID", "start": 59, "width": 9 },
+    { "fieldName": "Delim13", "start": 68, "width": 1 },
+    { "fieldName": "Location", "start": 69, "width": 10 },
+    { "fieldName": "Delim14", "start": 79, "width": 1 },
+    { "fieldName": "RefNum", "start": 80, "width": 10 },
+    { "fieldName": "Delim15", "start": 90, "width": 1 },
+    { "fieldName": "RepSerialNum", "start": 91, "width": 10 },
+    { "fieldName": "Delim16", "start": 101, "width": 1 },
 
-    StringBuilder callQuery = new StringBuilder("{CALL " + procedureName + "(");
+    { "fieldName": "SerialNumber", "start": 102, "width": 10 },
+    { "fieldName": "Delim17", "start": 112, "width": 1 },
+    { "fieldName": "DCIP", "start": 113, "width": 10 },
+    { "fieldName": "Delim18", "start": 123, "width": 1 },
+    { "fieldName": "Zip", "start": 124, "width": 10 },
+    { "fieldName": "Delim19", "start": 134, "width": 1 },
+    { "fieldName": "CustAcctNum", "start": 135, "width": 15 },
+    { "fieldName": "Delim20", "start": 150, "width": 1 },
+    { "fieldName": "ImageCode", "start": 151, "width": 15 },
+    { "fieldName": "Delim21", "start": 166, "width": 1 },
+    { "fieldName": "CPCS", "start": 167, "width": 17 },
+    { "fieldName": "Delim22", "start": 184, "width": 1 },
+    { "fieldName": "UserText1", "start": 185, "width": 25 },
+    { "fieldName": "Delim23", "start": 210, "width": 1 },
+    { "fieldName": "UserText2", "start": 211, "width": 25 },
+    { "fieldName": "Delim24", "start": 236, "width": 1 },
 
-    for (int i = 0; i < params.length; i++) {
-        callQuery.append("?");
-        if (i < params.length - 1) {
-            callQuery.append(",");
-        }
-    }
+    { "fieldName": "Addr1", "start": 237, "width": 35 },
+    { "fieldName": "Delim25", "start": 272, "width": 1 },
+    { "fieldName": "Addr2", "start": 273, "width": 35 },
+    { "fieldName": "Delim26", "start": 308, "width": 1 },
+    { "fieldName": "City", "start": 309, "width": 35 },
+    { "fieldName": "Delim27", "start": 344, "width": 1 },
+    { "fieldName": "Name1", "start": 345, "width": 35 },
+    { "fieldName": "Delim28", "start": 380, "width": 1 },
+    { "fieldName": "Name2", "start": 381, "width": 35 },
+    { "fieldName": "Delim29", "start": 416, "width": 1 },
+    { "fieldName": "Account", "start": 417, "width": 50 },
+    { "fieldName": "Delim30", "start": 467, "width": 1 },
+    { "fieldName": "Company", "start": 468, "width": 50 },
+    { "fieldName": "Delim31", "start": 518, "width": 1 },
+    { "fieldName": "Class", "start": 519, "width": 50 },
+    { "fieldName": "Delim32", "start": 569, "width": 1 },
+    { "fieldName": "Department", "start": 570, "width": 50 },
+    { "fieldName": "Delim33", "start": 620, "width": 1 },
 
-    callQuery.append(")}");
+    { "fieldName": "Amount", "start": 621, "width": 20 },
+    { "fieldName": "Delim34", "start": 641, "width": 1 },
+    { "fieldName": "EqAmount", "start": 642, "width": 20 },
+    { "fieldName": "Delim35", "start": 662, "width": 1 },
+    { "fieldName": "UserAmount1", "start": 663, "width": 20 },
+    { "fieldName": "Delim36", "start": 683, "width": 1 },
+    { "fieldName": "AmountRecov", "start": 684, "width": 20 },
+    { "fieldName": "Delim37", "start": 704, "width": 1 },
+    { "fieldName": "AvgRate", "start": 705, "width": 20 },
+    { "fieldName": "Delim38", "start": 725, "width": 1 },
+    { "fieldName": "Aged", "start": 726, "width": 20 },
+    { "fieldName": "Delim39", "start": 746, "width": 1 },
+    { "fieldName": "DaysRecovered", "start": 747, "width": 20 },
+    { "fieldName": "Delim40", "start": 767, "width": 1 },
+    { "fieldName": "UserNum1", "start": 768, "width": 20 },
+    { "fieldName": "Delim41", "start": 788, "width": 1 },
+    { "fieldName": "UserNum2", "start": 789, "width": 20 },
+    { "fieldName": "Delim42", "start": 809, "width": 1 },
 
-    try (CallableStatement stmt = connection.prepareCall(callQuery.toString());
-         BufferedWriter writer = new BufferedWriter(new FileWriter(outputFilePath))) {
-
-        // Set SP parameters, if there are any
-        for (int i = 0; i < params.length; i++) {
-            stmt.setObject(i + 1, params[i]);
-        }
-
-        boolean hasResults = stmt.execute();
-
-        // Handles both update counts and result sets.
-        while (true) {
-            if (hasResults) {
-                try (ResultSet rs = stmt.getResultSet()) {
-                    ResultSetMetaData metaData = rs.getMetaData();
-                    int columnCount = metaData.getColumnCount();
-
-                    // No column headers.
-                    // No commas added by Java.
-                    // The SP-provided Delim1...Delim46 values supply '|'.
-                    while (rs.next()) {
-                        for (int i = 1; i <= columnCount; i++) {
-                            String value = rs.getString(i);
-                            writer.write(value == null ? "" : value);
-                        }
-                        writer.newLine();
-                    }
-                }
-            } else {
-                int updateCount = stmt.getUpdateCount();
-
-                // No further result set or update count exists.
-                if (updateCount == -1) {
-                    break;
-                }
-            }
-
-            hasResults = stmt.getMoreResults();
-        }
-
-        writer.flush();
-    }
-
-    System.out.println("Stored procedure output written to file: " + outputFilePath);
+    { "fieldName": "AvailOrPaid", "start": 810, "width": 10 },
+    { "fieldName": "Delim43", "start": 820, "width": 1 },
+    { "fieldName": "EffectiveDate", "start": 821, "width": 10 },
+    { "fieldName": "Delim44", "start": 831, "width": 1 },
+    { "fieldName": "PostedOrIssue", "start": 832, "width": 10 },
+    { "fieldName": "Delim45", "start": 842, "width": 1 },
+    { "fieldName": "EqDate", "start": 843, "width": 10 },
+    { "fieldName": "Delim46", "start": 853, "width": 1 }
+  ]
 }
