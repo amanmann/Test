@@ -1,14 +1,25 @@
-CREATE TABLE dbo.[tbl_BAREDITO-22]
+SELECT
+    -- your other columns here
+
+    N.Name1 AS Name1,
+    LEFT(TRIM(N.Name1), 6) AS Zip
+
+FROM dbo.[tbl_BAREDITO-22] T
+
+CROSS APPLY
 (
-    [report]    NVARCHAR(8)  NULL,
-    [rep_name]  NVARCHAR(32) NULL,
-    [rep_date]  DATETIME2    NULL,
-    [account]   NVARCHAR(16) NULL,
-    [tc]        NVARCHAR(2)  NULL,
-    [amount]    FLOAT        NULL,
-    [julian]    NVARCHAR(6)  NULL,
-    [greg_m/d]  DATETIME2    NULL,
-    [ref]       NVARCHAR(8)  NULL,
-    [desc1]     NVARCHAR(34) NULL,
-    [desc2]     NVARCHAR(34) NULL
-);
+    SELECT
+        CASE
+            WHEN T.[account] IS NULL THEN NULL
+
+            -- account contains only zeroes
+            WHEN PATINDEX('%[^0]%', T.[account]) = 0 THEN ''
+
+            -- remove zeroes only from the beginning
+            ELSE SUBSTRING(
+                T.[account],
+                PATINDEX('%[^0]%', T.[account]),
+                LEN(T.[account])
+            )
+        END AS Name1
+) N;
