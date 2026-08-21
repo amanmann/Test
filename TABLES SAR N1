@@ -1,13 +1,44 @@
-CREATE TABLE dbo.[FRNT_EUC_SiouxFalls_Recollector_tbl_BARAE08P_O22]
-(
-    [Report Name]   NVARCHAR(8)  NULL,
-    [Source]        NVARCHAR(3)  NULL,
-    [efdt]          DATE         NULL,
-    [Agency Name]   NVARCHAR(12) NULL,
-    [Purchase Ct]   FLOAT        NULL,
-    [Purchase Amt]  FLOAT        NULL,
-    [Cash Adv Ct]   FLOAT        NULL,
-    [Cash Adv Amt]  FLOAT        NULL,
-    [Pymts Ct]      FLOAT        NULL,
-    [Payment Amt]   FLOAT        NULL
-);
+"FRNT_EUC_SiouxFalls_Recollector_tbl_BARAE08P_O22": {
+  "columns": [
+    {
+      "name": "Report Name",
+      "dataType": "VARCHAR"
+    },
+    {
+      "name": "Source",
+      "dataType": "VARCHAR"
+    },
+    {
+      "name": "efdt",
+      "dataType": "DATE"
+    },
+    {
+      "name": "Agency Name",
+      "dataType": "VARCHAR"
+    },
+    {
+      "name": "Purchase Ct",
+      "dataType": "FLOAT"
+    },
+    {
+      "name": "Purchase Amt",
+      "dataType": "FLOAT"
+    },
+    {
+      "name": "Cash Adv Ct",
+      "dataType": "FLOAT"
+    },
+    {
+      "name": "Cash Adv Amt",
+      "dataType": "FLOAT"
+    },
+    {
+      "name": "Pymts Ct",
+      "dataType": "FLOAT"
+    },
+    {
+      "name": "Payment Amt",
+      "dataType": "FLOAT"
+    }
+  ]
+}
