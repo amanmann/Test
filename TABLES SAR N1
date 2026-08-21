@@ -1,20 +1,14 @@
-    "FRNT_EUC_SiouxFalls_Recollector_tbl_BCOARB7S_001": {
-      "columns": [
-        {
-          "name": "Source_Code",
-          "type": "FLOAT"
-        },
-        {
-          "name": "Source_name",
-          "type": "VARCHAR"
-        },
-        {
-          "name": "Efdt",
-          "type": "DATETIME2"
-        },
-        {
-          "name": "Amt_Due",
-          "type": "FLOAT"
-        }
-      ]
-    }
+CREATE TABLE dbo.[tbl_BAREDITO-22]
+(
+    [report]    NVARCHAR(8)  NULL,
+    [rep_name]  NVARCHAR(32) NULL,
+    [rep_date]  DATETIME2    NULL,
+    [account]   NVARCHAR(16) NULL,
+    [tc]        NVARCHAR(2)  NULL,
+    [amount]    FLOAT        NULL,
+    [julian]    NVARCHAR(6)  NULL,
+    [greg_m/d]  DATETIME2    NULL,
+    [ref]       NVARCHAR(8)  NULL,
+    [desc1]     NVARCHAR(34) NULL,
+    [desc2]     NVARCHAR(34) NULL
+);
