@@ -1,78 +1,13 @@
-{
-  "FRNT_EUC_SiouxFalls_Recollector_tbl_BARACON7_O",
-  "columns": [
-    {
-      "name": "WODate",
-      "dataType": "DATE"
-    },
-    {
-      "name": "AccountNo",
-      "dataType": "STRING"
-    },
-    {
-      "name": "BCID",
-      "dataType": "STRING"
-    },
-    {
-      "name": "Amount",
-      "dataType": "DOUBLE"
-    },
-    {
-      "name": "TranCode",
-      "dataType": "STRING"
-    },
-    {
-      "name": "ClearingNo",
-      "dataType": "STRING"
-    }
-  ]
-},
-{
-  "FRNT_EUC_SiouxFalls_Recollector_tbl_BAREDITO_22",
-  "columns": [
-    {
-      "name": "report",
-      "dataType": "STRING"
-    },
-    {
-      "name": "rep_name",
-      "dataType": "STRING"
-    },
-    {
-      "name": "rep_date",
-      "dataType": "DATE"
-    },
-    {
-      "name": "account",
-      "dataType": "STRING"
-    },
-    {
-      "name": "tc",
-      "dataType": "STRING"
-    },
-    {
-      "name": "amount",
-      "dataType": "DOUBLE"
-    },
-    {
-      "name": "julian",
-      "dataType": "STRING"
-    },
-    {
-      "name": "greg_m/d",
-      "dataType": "DATE"
-    },
-    {
-      "name": "ref",
-      "dataType": "STRING"
-    },
-    {
-      "name": "desc1",
-      "dataType": "STRING"
-    },
-    {
-      "name": "desc2",
-      "dataType": "STRING"
-    }
-  ]
-}
+CREATE TABLE dbo.[FRNT_EUC_SiouxFalls_Recollector_tbl_BARAE08P_O22]
+(
+    [Report Name]   NVARCHAR(8)  NULL,
+    [Source]        NVARCHAR(3)  NULL,
+    [efdt]          DATE         NULL,
+    [Agency Name]   NVARCHAR(12) NULL,
+    [Purchase Ct]   FLOAT        NULL,
+    [Purchase Amt]  FLOAT        NULL,
+    [Cash Adv Ct]   FLOAT        NULL,
+    [Cash Adv Amt]  FLOAT        NULL,
+    [Pymts Ct]      FLOAT        NULL,
+    [Payment Amt]   FLOAT        NULL
+);
