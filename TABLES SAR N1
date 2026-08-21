@@ -1,9 +1,78 @@
-CREATE TABLE dbo.[tbl_BARACON7-O]
-(
-    [WODate]      DATETIME2     NULL,
-    [AccountNo]   NVARCHAR(16)  NULL,
-    [BCID]        NVARCHAR(11)  NULL,
-    [Amount]      FLOAT         NULL,
-    [TranCode]    FLOAT         NULL,
-    [ClearingNo]  NVARCHAR(3)   NULL
-);
+{
+  "FRNT_EUC_SiouxFalls_Recollector_tbl_BARACON7_O",
+  "columns": [
+    {
+      "name": "WODate",
+      "dataType": "DATE"
+    },
+    {
+      "name": "AccountNo",
+      "dataType": "STRING"
+    },
+    {
+      "name": "BCID",
+      "dataType": "STRING"
+    },
+    {
+      "name": "Amount",
+      "dataType": "DOUBLE"
+    },
+    {
+      "name": "TranCode",
+      "dataType": "STRING"
+    },
+    {
+      "name": "ClearingNo",
+      "dataType": "STRING"
+    }
+  ]
+},
+{
+  "FRNT_EUC_SiouxFalls_Recollector_tbl_BAREDITO_22",
+  "columns": [
+    {
+      "name": "report",
+      "dataType": "STRING"
+    },
+    {
+      "name": "rep_name",
+      "dataType": "STRING"
+    },
+    {
+      "name": "rep_date",
+      "dataType": "DATE"
+    },
+    {
+      "name": "account",
+      "dataType": "STRING"
+    },
+    {
+      "name": "tc",
+      "dataType": "STRING"
+    },
+    {
+      "name": "amount",
+      "dataType": "DOUBLE"
+    },
+    {
+      "name": "julian",
+      "dataType": "STRING"
+    },
+    {
+      "name": "greg_m/d",
+      "dataType": "DATE"
+    },
+    {
+      "name": "ref",
+      "dataType": "STRING"
+    },
+    {
+      "name": "desc1",
+      "dataType": "STRING"
+    },
+    {
+      "name": "desc2",
+      "dataType": "STRING"
+    }
+  ]
+}
