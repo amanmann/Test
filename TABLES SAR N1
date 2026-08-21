@@ -1,10 +1,44 @@
-else if (type.equals("DECIMAL")) {
-    try {
-        BigDecimal decimalValue = new BigDecimal(value);
-        pstmt.setBigDecimal(index, decimalValue);
-    } catch (NumberFormatException e) {
-        throw new SQLException(
-                "Error parsing DECIMAL value: " + value, e
-        );
+CREATE TABLE dbo.[FRNT_EUC_SiouxFalls_Recollector_tbl_BSADV308_AA]
+(
+    [REPORT]          NVARCHAR(255) NULL,
+    [MASTERCARD]      NVARCHAR(255) NULL,
+    [DATE]            DATE          NULL,
+    [MEMBER ID]       BIGINT        NULL,
+    [TRANSFER AGENT]  BIGINT        NULL,
+    [Amount]          DECIMAL(18,2) NULL,
+    [D/C]             NVARCHAR(255) NULL
+);
+
+
+"FRNT_EUC_SiouxFalls_Recollector_tbl_BSADV308_AA": {
+  "columns": [
+    {
+      "name": "REPORT",
+      "dataType": "VARCHAR"
+    },
+    {
+      "name": "MASTERCARD",
+      "dataType": "VARCHAR"
+    },
+    {
+      "name": "DATE",
+      "dataType": "DATE_DD_MMM_YYYY"
+    },
+    {
+      "name": "MEMBER ID",
+      "dataType": "BIGINT"
+    },
+    {
+      "name": "TRANSFER AGENT",
+      "dataType": "BIGINT"
+    },
+    {
+      "name": "Amount",
+      "dataType": "DECIMAL"
+    },
+    {
+      "name": "D/C",
+      "dataType": "VARCHAR"
     }
+  ]
 }
