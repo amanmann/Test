@@ -1,38 +1,9 @@
-SELECT
-    -- other columns
-    T.[report] AS UserText1,
-    T.[rep_date] AS AvailOrPaid,
-
-    -- Name1 = Access RemoveLeadingZeros(account)
-    N.Name1 AS Name1,
-
-    -- Zip = Access Left(Trim(Name1), 6)
-    LEFT(LTRIM(RTRIM(N.Name1)), 6) AS Zip,
-
-    -- other columns
-    CASE
-        WHEN T.[tc] = '20' THEN 'Credit'
-        ELSE 'Debit'
-    END AS DCIP
-
-INTO #qryBAREDITO_22
-
-FROM dbo.[tbl_BAREDITO-22] AS T
-
-CROSS APPLY
+CREATE TABLE dbo.[tbl_BARACON7-O]
 (
-    SELECT
-        CASE
-            WHEN T.[account] IS NULL THEN NULL
-
-            -- If account is all zeroes
-            WHEN PATINDEX('%[^0]%', T.[account]) = 0 THEN ''
-
-            -- Remove zeroes only from the beginning
-            ELSE SUBSTRING(
-                T.[account],
-                PATINDEX('%[^0]%', T.[account]),
-                LEN(T.[account])
-            )
-        END AS Name1
-) AS N;
+    [WODate]      DATETIME2     NULL,
+    [AccountNo]   NVARCHAR(16)  NULL,
+    [BCID]        NVARCHAR(11)  NULL,
+    [Amount]      FLOAT         NULL,
+    [TranCode]    FLOAT         NULL,
+    [ClearingNo]  NVARCHAR(3)   NULL
+);
