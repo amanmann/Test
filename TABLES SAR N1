@@ -16,36 +16,38 @@ public class PipeFileComparator {
 
     private static final String DELIMITER_REGEX = "\\|";
 
-    private static final int EXPECTED_COLUMN_COUNT = 46;
-
     /*
-     * Change ONLY this configuration if you want different
-     * matching key columns.
+     * CHANGE THIS LINE if you want a different matching key.
      *
      * Examples:
      *
-     * List.of(List.of("Account"))
+     * Account only:
+     * List.of(List.of("Account"));
      *
-     * List.of(List.of("Account", "RefNum"))
+     * Account + RefNum:
+     * List.of(List.of("Account", "RefNum"));
      *
-     * List.of(List.of("Account", "EffectiveDate"))
+     * Account + RefNum + EffectiveDate:
+     * List.of(List.of("Account", "RefNum", "EffectiveDate"));
      */
     private static final List<List<String>> MATCH_PROFILES =
             List.of(List.of("Account"));
 
     /*
-     * A probable logical match is accepted only when at most
-     * this many columns differ.
+     * We consider two unmatched records to represent the same
+     * logical record if their configured key matches and no more
+     * than this many columns differ.
      */
     private static final int MAX_DIFFERENT_COLUMNS = 2;
 
     /*
-     * Only unmatched VALID records enter fuzzy comparison.
-     * This prevents accidentally loading enormous mismatch
-     * sets into memory.
+     * Safety limit for column-level comparison.
      */
     private static final int MAX_FUZZY_RECORDS = 500_000;
 
+    /*
+     * Maximum number of examples written into report sections.
+     */
     private static final int MAX_REPORT_EXAMPLES = 10_000;
 
     /*
@@ -56,7 +58,7 @@ public class PipeFileComparator {
 
     /*
      * ============================================================
-     * COLUMN DEFINITIONS
+     * FILE COLUMN DEFINITIONS
      * ============================================================
      */
 
@@ -109,6 +111,9 @@ public class PipeFileComparator {
             "EqDate"               // 46
     );
 
+    private static final int EXPECTED_COLUMN_COUNT =
+            COLUMNS.size();
+
 
     private static final Map<String, Integer> COLUMN_INDEX =
             createColumnIndex();
@@ -116,7 +121,8 @@ public class PipeFileComparator {
 
     private static Map<String, Integer> createColumnIndex() {
 
-        Map<String, Integer> result = new HashMap<>();
+        Map<String, Integer> result =
+                new HashMap<>();
 
         for (int i = 0; i < COLUMNS.size(); i++) {
             result.put(COLUMNS.get(i), i);
@@ -128,7 +134,67 @@ public class PipeFileComparator {
 
     /*
      * ============================================================
-     * MAIN COMPARISON
+     * VERY IMPORTANT:
+     *
+     * PARSE ONE PIPE-DELIMITED RECORD
+     * ============================================================
+     *
+     * Your files have NO opening delimiter but DO have a closing
+     * delimiter after the final column.
+     *
+     * Example:
+     *
+     * A|B|C|
+     *
+     * Logically this means 3 columns.
+     *
+     * But:
+     *
+     * line.split("\\|", -1)
+     *
+     * would produce:
+     *
+     * A
+     * B
+     * C
+     * ""
+     *
+     * i.e. 4 values.
+     *
+     * Therefore we remove EXACTLY ONE trailing pipe before parsing.
+     *
+     * We do NOT modify the original raw record itself.
+     * ============================================================
+     */
+
+    private static String[] parseColumns(
+            String line
+    ) {
+
+        String lineForParsing = line;
+
+        /*
+         * Remove exactly one record-ending delimiter.
+         */
+        if (lineForParsing.endsWith("|")) {
+
+            lineForParsing =
+                    lineForParsing.substring(
+                            0,
+                            lineForParsing.length() - 1
+                    );
+        }
+
+        return lineForParsing.split(
+                DELIMITER_REGEX,
+                -1
+        );
+    }
+
+
+    /*
+     * ============================================================
+     * MAIN COMPARISON METHOD
      * ============================================================
      */
 
@@ -139,33 +205,35 @@ public class PipeFileComparator {
             Path reportFile
     ) throws IOException {
 
-        Files.createDirectories(workingDirectory);
+        Files.createDirectories(
+                workingDirectory
+        );
+
 
         /*
-         * --------------------------------------------------------
+         * ========================================================
          * STEP 1
          *
-         * Validate the structure of every line BEFORE comparison.
-         *
-         * Only records with exactly 46 columns are placed in the
-         * valid files.
-         *
-         * Bad records are stored separately and comparison
-         * continues.
-         * --------------------------------------------------------
+         * Separate structurally valid and malformed records.
+         * ========================================================
          */
 
-        Path validProduction =
-                workingDirectory.resolve("valid_production.txt");
+        Path validProductionFile =
+                workingDirectory.resolve(
+                        "valid_production.txt"
+                );
 
-        Path validMigrated =
-                workingDirectory.resolve("valid_migrated.txt");
+
+        Path validMigratedFile =
+                workingDirectory.resolve(
+                        "valid_migrated.txt"
+                );
 
 
         ValidationResult productionValidation =
                 validateAndSeparate(
                         productionFile,
-                        validProduction,
+                        validProductionFile,
                         "PRODUCTION"
                 );
 
@@ -173,36 +241,39 @@ public class PipeFileComparator {
         ValidationResult migratedValidation =
                 validateAndSeparate(
                         migratedFile,
-                        validMigrated,
+                        validMigratedFile,
                         "MIGRATED"
                 );
 
 
         /*
-         * --------------------------------------------------------
+         * ========================================================
          * STEP 2
          *
-         * Sort only structurally valid records.
-         * --------------------------------------------------------
+         * Sort valid records externally.
+         *
+         * This makes comparison order-independent while still
+         * preserving duplicates.
+         * ========================================================
          */
 
-        Path prodSorted =
+        Path productionSorted =
                 externalSort(
-                        validProduction,
+                        validProductionFile,
                         workingDirectory,
-                        "prod"
+                        "production"
                 );
 
 
         Path migratedSorted =
                 externalSort(
-                        validMigrated,
+                        validMigratedFile,
                         workingDirectory,
                         "migrated"
                 );
 
 
-        Path unmatchedProd =
+        Path unmatchedProduction =
                 workingDirectory.resolve(
                         "unmatched_production.txt"
                 );
@@ -215,36 +286,45 @@ public class PipeFileComparator {
 
 
         /*
-         * --------------------------------------------------------
+         * ========================================================
          * STEP 3
          *
          * Exact order-independent comparison.
-         * --------------------------------------------------------
+         * ========================================================
          */
 
         ExactComparisonResult exactResult =
                 exactCompare(
-                        prodSorted,
+                        productionSorted,
                         migratedSorted,
-                        unmatchedProd,
+                        unmatchedProduction,
                         unmatchedMigrated
                 );
 
 
         /*
-         * --------------------------------------------------------
+         * ========================================================
          * STEP 4
          *
-         * Analyze valid unmatched records at column level.
-         * --------------------------------------------------------
+         * Try matching unmatched records by Account (or whatever
+         * MATCH_PROFILES is configured to use).
+         * ========================================================
          */
 
         FuzzyComparisonResult fuzzyResult =
                 fuzzyCompare(
-                        unmatchedProd,
+                        unmatchedProduction,
                         unmatchedMigrated
                 );
 
+
+        /*
+         * ========================================================
+         * STEP 5
+         *
+         * Build final result.
+         * ========================================================
+         */
 
         ComparisonResult result =
                 new ComparisonResult(
@@ -275,11 +355,11 @@ public class PipeFileComparator {
 
 
         /*
-         * --------------------------------------------------------
-         * STEP 5
+         * ========================================================
+         * STEP 6
          *
-         * Generate detailed report.
-         * --------------------------------------------------------
+         * Write detailed report.
+         * ========================================================
          */
 
         writeReport(
@@ -289,11 +369,15 @@ public class PipeFileComparator {
 
 
         /*
-         * Cleanup large temporary sorted files.
+         * Remove large temporary sorted files.
          */
+        Files.deleteIfExists(
+                productionSorted
+        );
 
-        Files.deleteIfExists(prodSorted);
-        Files.deleteIfExists(migratedSorted);
+        Files.deleteIfExists(
+                migratedSorted
+        );
 
 
         return result;
@@ -302,7 +386,7 @@ public class PipeFileComparator {
 
     /*
      * ============================================================
-     * FILE STRUCTURE VALIDATION
+     * VALIDATE FILE STRUCTURE
      * ============================================================
      */
 
@@ -315,6 +399,7 @@ public class PipeFileComparator {
         long totalRecords = 0;
         long validRecords = 0;
         long invalidRecords = 0;
+
 
         List<MalformedRecord> malformedRecords =
                 new ArrayList<>();
@@ -345,15 +430,23 @@ public class PipeFileComparator {
                 totalRecords++;
 
 
+                /*
+                 * IMPORTANT:
+                 * Uses parseColumns(), which understands your
+                 * trailing record delimiter.
+                 */
                 String[] values =
-                        line.split(
-                                DELIMITER_REGEX,
-                                -1
-                        );
+                        parseColumns(line);
 
 
-                if (values.length == EXPECTED_COLUMN_COUNT) {
+                if (values.length
+                        == EXPECTED_COLUMN_COUNT) {
 
+                    /*
+                     * Keep ORIGINAL line.
+                     *
+                     * Do not remove trailing pipe from actual data.
+                     */
                     validWriter.write(line);
                     validWriter.newLine();
 
@@ -365,9 +458,8 @@ public class PipeFileComparator {
 
 
                     /*
-                     * Keep malformed records separately.
-                     *
-                     * Comparison does NOT stop.
+                     * Save malformed record details, but DO NOT
+                     * terminate processing.
                      */
                     if (malformedRecords.size()
                             < MAX_REPORT_EXAMPLES) {
@@ -403,9 +495,9 @@ public class PipeFileComparator {
      */
 
     private static ExactComparisonResult exactCompare(
-            Path prodSorted,
+            Path productionSorted,
             Path migratedSorted,
-            Path unmatchedProd,
+            Path unmatchedProduction,
             Path unmatchedMigrated
     ) throws IOException {
 
@@ -413,9 +505,9 @@ public class PipeFileComparator {
 
 
         try (
-                BufferedReader prodReader =
+                BufferedReader productionReader =
                         Files.newBufferedReader(
-                                prodSorted,
+                                productionSorted,
                                 StandardCharsets.UTF_8
                         );
 
@@ -425,36 +517,42 @@ public class PipeFileComparator {
                                 StandardCharsets.UTF_8
                         );
 
-                BufferedWriter prodUnmatchedWriter =
+                BufferedWriter unmatchedProductionWriter =
                         Files.newBufferedWriter(
-                                unmatchedProd,
+                                unmatchedProduction,
                                 StandardCharsets.UTF_8
                         );
 
-                BufferedWriter migratedUnmatchedWriter =
+                BufferedWriter unmatchedMigratedWriter =
                         Files.newBufferedWriter(
                                 unmatchedMigrated,
                                 StandardCharsets.UTF_8
                         )
         ) {
 
-            String prod =
-                    prodReader.readLine();
+            String production =
+                    productionReader.readLine();
+
 
             String migrated =
                     migratedReader.readLine();
 
 
-            while (prod != null || migrated != null) {
+            while (production != null
+                    || migrated != null) {
+
 
                 /*
-                 * Migrated still has records,
-                 * production is exhausted.
+                 * Production exhausted.
                  */
-                if (prod == null) {
+                if (production == null) {
 
-                    migratedUnmatchedWriter.write(migrated);
-                    migratedUnmatchedWriter.newLine();
+                    unmatchedMigratedWriter.write(
+                            migrated
+                    );
+
+                    unmatchedMigratedWriter.newLine();
+
 
                     migrated =
                             migratedReader.readLine();
@@ -464,34 +562,41 @@ public class PipeFileComparator {
 
 
                 /*
-                 * Production still has records,
-                 * migrated is exhausted.
+                 * Migrated exhausted.
                  */
                 if (migrated == null) {
 
-                    prodUnmatchedWriter.write(prod);
-                    prodUnmatchedWriter.newLine();
+                    unmatchedProductionWriter.write(
+                            production
+                    );
 
-                    prod =
-                            prodReader.readLine();
+                    unmatchedProductionWriter.newLine();
+
+
+                    production =
+                            productionReader.readLine();
 
                     continue;
                 }
 
 
                 int comparison =
-                        prod.compareTo(migrated);
+                        production.compareTo(
+                                migrated
+                        );
 
 
                 /*
-                 * Exact record match.
+                 * Exact match.
                  */
                 if (comparison == 0) {
 
                     exactMatches++;
 
-                    prod =
-                            prodReader.readLine();
+
+                    production =
+                            productionReader.readLine();
+
 
                     migrated =
                             migratedReader.readLine();
@@ -499,27 +604,33 @@ public class PipeFileComparator {
                 }
 
                 /*
-                 * Production record not currently
-                 * present in migrated data.
+                 * Production record not currently matched.
                  */
                 else if (comparison < 0) {
 
-                    prodUnmatchedWriter.write(prod);
-                    prodUnmatchedWriter.newLine();
+                    unmatchedProductionWriter.write(
+                            production
+                    );
 
-                    prod =
-                            prodReader.readLine();
+                    unmatchedProductionWriter.newLine();
+
+
+                    production =
+                            productionReader.readLine();
 
                 }
 
                 /*
-                 * Migrated record not currently
-                 * present in production.
+                 * Migrated record not currently matched.
                  */
                 else {
 
-                    migratedUnmatchedWriter.write(migrated);
-                    migratedUnmatchedWriter.newLine();
+                    unmatchedMigratedWriter.write(
+                            migrated
+                    );
+
+                    unmatchedMigratedWriter.newLine();
+
 
                     migrated =
                             migratedReader.readLine();
@@ -536,22 +647,23 @@ public class PipeFileComparator {
 
     /*
      * ============================================================
-     * FUZZY / COLUMN LEVEL COMPARISON
+     * COLUMN-LEVEL / LOGICAL RECORD COMPARISON
      * ============================================================
      */
 
     private static FuzzyComparisonResult fuzzyCompare(
-            Path unmatchedProdFile,
+            Path unmatchedProductionFile,
             Path unmatchedMigratedFile
     ) throws IOException {
 
-        List<DataRecord> production =
+
+        List<DataRecord> productionRecords =
                 readValidRecords(
-                        unmatchedProdFile
+                        unmatchedProductionFile
                 );
 
 
-        List<DataRecord> migrated =
+        List<DataRecord> migratedRecords =
                 readValidRecords(
                         unmatchedMigratedFile
                 );
@@ -560,39 +672,46 @@ public class PipeFileComparator {
         /*
          * Safety check.
          */
-        if (production.size() > MAX_FUZZY_RECORDS
-                || migrated.size() > MAX_FUZZY_RECORDS) {
+        if (productionRecords.size()
+                > MAX_FUZZY_RECORDS
+                ||
+                migratedRecords.size()
+                        > MAX_FUZZY_RECORDS) {
 
             throw new IllegalStateException(
                     """
-                    Too many unmatched VALID records for fuzzy comparison.
+                    Too many unmatched valid records for column-level matching.
 
                     Production unmatched: %d
                     Migrated unmatched:   %d
 
-                    This indicates a large difference between the files.
+                    This probably indicates a major difference between the
+                    files rather than isolated field differences.
+
                     Increase MAX_FUZZY_RECORDS only if this is expected.
                     """
                             .formatted(
-                                    production.size(),
-                                    migrated.size()
+                                    productionRecords.size(),
+                                    migratedRecords.size()
                             )
             );
         }
 
 
         /*
-         * Build one index for each configured matching profile.
+         * Build migrated record indexes by configured matching
+         * profile(s).
          */
         List<Map<String, List<DataRecord>>> migratedIndexes =
                 new ArrayList<>();
 
 
-        for (List<String> profile : MATCH_PROFILES) {
+        for (List<String> profile
+                : MATCH_PROFILES) {
 
             migratedIndexes.add(
                     buildIndex(
-                            migrated,
+                            migratedRecords,
                             profile
                     )
             );
@@ -600,8 +719,8 @@ public class PipeFileComparator {
 
 
         /*
-         * Prevent one migrated record from being matched
-         * against more than one production record.
+         * Prevent one migrated record being assigned to
+         * multiple production records.
          */
         Set<Long> usedMigratedRecordIds =
                 new HashSet<>();
@@ -617,25 +736,31 @@ public class PipeFileComparator {
 
         /*
          * ========================================================
-         * Process each production mismatch.
+         * Try finding a migrated candidate for each production
+         * mismatch.
          * ========================================================
          */
 
-        for (DataRecord productionRecord : production) {
+        for (DataRecord productionRecord
+                : productionRecords) {
+
 
             Set<DataRecord> candidates =
                     new LinkedHashSet<>();
 
 
             /*
-             * Find migrated candidates using configured key(s).
+             * Search each configured matching profile.
              */
             for (int profileIndex = 0;
                  profileIndex < MATCH_PROFILES.size();
                  profileIndex++) {
 
+
                 List<String> profile =
-                        MATCH_PROFILES.get(profileIndex);
+                        MATCH_PROFILES.get(
+                                profileIndex
+                        );
 
 
                 String key =
@@ -645,6 +770,9 @@ public class PipeFileComparator {
                         );
 
 
+                /*
+                 * Cannot safely match empty keys.
+                 */
                 if (key.isBlank()) {
                     continue;
                 }
@@ -662,24 +790,34 @@ public class PipeFileComparator {
                 for (DataRecord candidate
                         : matchingCandidates) {
 
-                    if (!usedMigratedRecordIds
-                            .contains(candidate.id())) {
 
-                        candidates.add(candidate);
+                    if (!usedMigratedRecordIds
+                            .contains(
+                                    candidate.id()
+                            )) {
+
+                        candidates.add(
+                                candidate
+                        );
                     }
                 }
             }
 
 
-            DataRecord bestCandidate = null;
+            DataRecord bestCandidate =
+                    null;
 
-            List<ColumnDifference> bestDifferences = null;
+
+            List<ColumnDifference> bestDifferences =
+                    null;
 
 
             /*
-             * Compare candidate records column-by-column.
+             * Compare all possible candidate records.
              */
-            for (DataRecord candidate : candidates) {
+            for (DataRecord candidate
+                    : candidates) {
+
 
                 List<ColumnDifference> differences =
                         findDifferences(
@@ -689,18 +827,22 @@ public class PipeFileComparator {
 
 
                 /*
-                 * Only call it a probable logical match
-                 * if very few columns differ.
+                 * Only accept records differing by at most
+                 * MAX_DIFFERENT_COLUMNS.
                  */
                 if (differences.size()
                         <= MAX_DIFFERENT_COLUMNS) {
 
+
                     if (bestCandidate == null
-                            || differences.size()
-                            < bestDifferences.size()) {
+                            ||
+                            differences.size()
+                                    < bestDifferences.size()) {
+
 
                         bestCandidate =
                                 candidate;
+
 
                         bestDifferences =
                                 differences;
@@ -710,9 +852,10 @@ public class PipeFileComparator {
 
 
             /*
-             * Logical record found.
+             * Corresponding logical record found.
              */
             if (bestCandidate != null) {
+
 
                 usedMigratedRecordIds.add(
                         bestCandidate.id()
@@ -730,7 +873,7 @@ public class PipeFileComparator {
             } else {
 
                 /*
-                 * No safe corresponding record found.
+                 * Nothing matching this production record.
                  */
                 remainingProduction.add(
                         productionRecord
@@ -740,11 +883,11 @@ public class PipeFileComparator {
 
 
         /*
-         * Anything not consumed from migrated side
-         * is considered an extra record.
+         * Migrated records that were never consumed are extra.
          */
         List<DataRecord> remainingMigrated =
-                migrated.stream()
+                migratedRecords
+                        .stream()
                         .filter(
                                 record ->
                                         !usedMigratedRecordIds
@@ -765,7 +908,7 @@ public class PipeFileComparator {
 
     /*
      * ============================================================
-     * COLUMN DIFFERENCE DETECTION
+     * FIND DIFFERING COLUMNS
      * ============================================================
      */
 
@@ -779,8 +922,9 @@ public class PipeFileComparator {
 
 
         for (int i = 0;
-             i < COLUMNS.size();
+             i < EXPECTED_COLUMN_COUNT;
              i++) {
+
 
             String productionValue =
                     production.values()[i];
@@ -795,6 +939,7 @@ public class PipeFileComparator {
                     migratedValue
             )) {
 
+
                 differences.add(
                         new ColumnDifference(
                                 i + 1,
@@ -806,8 +951,11 @@ public class PipeFileComparator {
 
 
                 /*
-                 * We only need to know that the number
-                 * exceeded the allowed mismatch threshold.
+                 * Optimization:
+                 *
+                 * Once we've exceeded the permitted difference
+                 * threshold, there is no need to compare the
+                 * remaining columns for candidate selection.
                  */
                 if (differences.size()
                         > MAX_DIFFERENT_COLUMNS) {
@@ -824,7 +972,7 @@ public class PipeFileComparator {
 
     /*
      * ============================================================
-     * INDEX CREATION
+     * BUILD INDEX BY CONFIGURABLE KEY
      * ============================================================
      */
 
@@ -838,6 +986,7 @@ public class PipeFileComparator {
 
 
         for (DataRecord record : records) {
+
 
             String key =
                     buildKey(
@@ -853,8 +1002,11 @@ public class PipeFileComparator {
 
             index.computeIfAbsent(
                     key,
-                    ignored -> new ArrayList<>()
-            ).add(record);
+                    ignored ->
+                            new ArrayList<>()
+            ).add(
+                    record
+            );
         }
 
 
@@ -864,7 +1016,7 @@ public class PipeFileComparator {
 
     /*
      * ============================================================
-     * BUILD CONFIGURABLE RECORD KEY
+     * BUILD MATCHING KEY
      * ============================================================
      */
 
@@ -881,16 +1033,20 @@ public class PipeFileComparator {
                 false;
 
 
-        for (String columnName : keyColumns) {
+        for (String columnName
+                : keyColumns) {
+
 
             Integer index =
-                    COLUMN_INDEX.get(columnName);
+                    COLUMN_INDEX.get(
+                            columnName
+                    );
 
 
             if (index == null) {
 
                 throw new IllegalArgumentException(
-                        "Unknown key column: "
+                        "Unknown matching key column: "
                                 + columnName
                 );
             }
@@ -908,13 +1064,16 @@ public class PipeFileComparator {
             }
 
 
-            /*
-             * Separator unlikely to exist in normal data.
-             */
             result.append(
-                    normalizeKeyValue(value)
+                    normalizeKeyValue(
+                            value
+                    )
             );
 
+
+            /*
+             * Internal separator.
+             */
             result.append('\u0001');
         }
 
@@ -936,14 +1095,13 @@ public class PipeFileComparator {
             return "";
         }
 
-
         return value.trim();
     }
 
 
     /*
      * ============================================================
-     * READ STRUCTURALLY VALID RECORDS
+     * READ UNMATCHED VALID RECORDS
      * ============================================================
      */
 
@@ -951,38 +1109,45 @@ public class PipeFileComparator {
             Path file
     ) throws IOException {
 
+
         List<DataRecord> records =
                 new ArrayList<>();
 
 
-        try (BufferedReader reader =
-                     Files.newBufferedReader(
-                             file,
-                             StandardCharsets.UTF_8
-                     )) {
+        try (
+                BufferedReader reader =
+                        Files.newBufferedReader(
+                                file,
+                                StandardCharsets.UTF_8
+                        )
+        ) {
+
 
             String line;
 
-            long id = 0;
+            long recordId = 0;
 
 
             while ((line = reader.readLine()) != null) {
 
-                id++;
 
-
-                String[] values =
-                        line.split(
-                                DELIMITER_REGEX,
-                                -1
-                        );
+                recordId++;
 
 
                 /*
-                 * This should never normally happen because
-                 * malformed rows were already separated.
+                 * IMPORTANT:
+                 * Uses parseColumns() so trailing pipe does NOT
+                 * become an extra fake column.
+                 */
+                String[] values =
+                        parseColumns(line);
+
+
+                /*
+                 * Should normally never occur because malformed
+                 * rows were already removed earlier.
                  *
-                 * However, do NOT crash even here.
+                 * But still continue safely instead of crashing.
                  */
                 if (values.length
                         != EXPECTED_COLUMN_COUNT) {
@@ -993,7 +1158,7 @@ public class PipeFileComparator {
 
                 records.add(
                         new DataRecord(
-                                id,
+                                recordId,
                                 line,
                                 values
                         )
@@ -1017,16 +1182,19 @@ public class PipeFileComparator {
             Path reportFile
     ) throws IOException {
 
-        try (BufferedWriter writer =
-                     Files.newBufferedWriter(
-                             reportFile,
-                             StandardCharsets.UTF_8
-                     )) {
+
+        try (
+                BufferedWriter writer =
+                        Files.newBufferedWriter(
+                                reportFile,
+                                StandardCharsets.UTF_8
+                        )
+        ) {
 
 
             /*
              * ====================================================
-             * SUMMARY
+             * OVERALL SUMMARY
              * ====================================================
              */
 
@@ -1045,6 +1213,7 @@ public class PipeFileComparator {
                     "============================================================"
             );
 
+
             writer.newLine();
 
 
@@ -1052,6 +1221,7 @@ public class PipeFileComparator {
                     writer,
                     "PRODUCTION"
             );
+
 
             writeLine(
                     writer,
@@ -1088,6 +1258,7 @@ public class PipeFileComparator {
                     "MIGRATED"
             );
 
+
             writeLine(
                     writer,
                     "------------------------------------------------------------"
@@ -1120,8 +1291,9 @@ public class PipeFileComparator {
 
             writeLine(
                     writer,
-                    "VALID RECORD COMPARISON"
+                    "COMPARISON"
             );
+
 
             writeLine(
                     writer,
@@ -1131,28 +1303,28 @@ public class PipeFileComparator {
 
             writeLine(
                     writer,
-                    "Exact matches            : "
+                    "Exact matches              : "
                             + result.exactMatches()
             );
 
 
             writeLine(
                     writer,
-                    "Records with differences : "
+                    "Logical records differing  : "
                             + result.probableMatches()
             );
 
 
             writeLine(
                     writer,
-                    "Missing valid records    : "
+                    "Missing valid records      : "
                             + result.missingValidRecords()
             );
 
 
             writeLine(
                     writer,
-                    "Extra valid records      : "
+                    "Extra valid records        : "
                             + result.extraValidRecords()
             );
 
@@ -1172,10 +1344,12 @@ public class PipeFileComparator {
                     "============================================================"
             );
 
+
             writeLine(
                     writer,
                     "COLUMN MISMATCH SUMMARY"
             );
+
 
             writeLine(
                     writer,
@@ -1187,8 +1361,8 @@ public class PipeFileComparator {
                     result.recordDifferences()
                             .stream()
                             .flatMap(
-                                    difference ->
-                                            difference
+                                    recordDifference ->
+                                            recordDifference
                                                     .differences()
                                                     .stream()
                             )
@@ -1200,37 +1374,42 @@ public class PipeFileComparator {
                             );
 
 
-            List<Map.Entry<String, Long>>
-                    sortedMismatchSummary =
-                    mismatchSummary
-                            .entrySet()
-                            .stream()
-                            .sorted(
-                                    Map.Entry
-                                            .<String, Long>
-                                                    comparingByValue()
-                                            .reversed()
-                            )
-                            .toList();
+            mismatchSummary
+                    .entrySet()
+                    .stream()
+                    .sorted(
+                            Map.Entry
+                                    .<String, Long>
+                                            comparingByValue()
+                                    .reversed()
+                    )
+                    .forEach(
+                            entry -> {
 
+                                try {
 
-            for (Map.Entry<String, Long> entry
-                    : sortedMismatchSummary) {
+                                    writeLine(
+                                            writer,
+                                            String.format(
+                                                    "%-25s : %d",
+                                                    entry.getKey(),
+                                                    entry.getValue()
+                                            )
+                                    );
 
-                writeLine(
-                        writer,
-                        String.format(
-                                "%-25s : %d",
-                                entry.getKey(),
-                                entry.getValue()
-                        )
-                );
-            }
+                                } catch (IOException e) {
+
+                                    throw new UncheckedIOException(
+                                            e
+                                    );
+                                }
+                            }
+                    );
 
 
             /*
              * ====================================================
-             * DETAILED COLUMN DIFFERENCES
+             * DETAILED FIELD DIFFERENCES
              * ====================================================
              */
 
@@ -1243,10 +1422,12 @@ public class PipeFileComparator {
                     "============================================================"
             );
 
+
             writeLine(
                     writer,
                     "DETAILED COLUMN DIFFERENCES"
             );
+
 
             writeLine(
                     writer,
@@ -1254,18 +1435,19 @@ public class PipeFileComparator {
             );
 
 
-            int count = 0;
+            int detailCounter = 0;
 
 
             for (RecordDifference difference
                     : result.recordDifferences()) {
 
-                if (count++
+
+                if (detailCounter++
                         >= MAX_REPORT_EXAMPLES) {
 
                     writeLine(
                             writer,
-                            "... report limit reached ..."
+                            "... REPORT LIMIT REACHED ..."
                     );
 
                     break;
@@ -1283,7 +1465,7 @@ public class PipeFileComparator {
 
                 writeLine(
                         writer,
-                        "PROBABLE LOGICAL RECORD MATCH"
+                        "LOGICAL RECORD MATCH"
                 );
 
 
@@ -1299,49 +1481,92 @@ public class PipeFileComparator {
                 for (List<String> profile
                         : MATCH_PROFILES) {
 
+
                     writeLine(
                             writer,
-                            "Matching profile: "
+                            "Matching key columns: "
                                     + profile
                     );
 
+
+                    for (String keyColumn : profile) {
+
+
+                        int index =
+                                COLUMN_INDEX.get(
+                                        keyColumn
+                                );
+
+
+                        writeLine(
+                                writer,
+                                keyColumn
+                                        + " = ["
+                                        + difference
+                                        .production()
+                                        .values()[index]
+                                        + "]"
+                        );
+                    }
+
+
+                    /*
+                     * Normally only one profile is configured.
+                     */
                     break;
                 }
 
 
-                for (ColumnDifference columnDifference
-                        : difference.differences()) {
-
-                    writer.newLine();
-
-
-                    writeLine(
-                            writer,
-                            "Column #"
-                                    + columnDifference.columnNumber()
-                                    + " - "
-                                    + columnDifference.columnName()
-                    );
-
-
-                    writeLine(
-                            writer,
-                            "Production : ["
-                                    + columnDifference.productionValue()
-                                    + "]"
-                    );
-
-
-                    writeLine(
-                            writer,
-                            "Migrated   : ["
-                                    + columnDifference.migratedValue()
-                                    + "]"
-                    );
-                }
-
-
                 writer.newLine();
+
+
+                if (difference.differences().isEmpty()) {
+
+                    writeLine(
+                            writer,
+                            "No data-column differences."
+                    );
+
+                    writeLine(
+                            writer,
+                            "Raw record formatting differs."
+                    );
+
+                } else {
+
+
+                    for (ColumnDifference columnDifference
+                            : difference.differences()) {
+
+
+                        writeLine(
+                                writer,
+                                "Column #"
+                                        + columnDifference.columnNumber()
+                                        + " - "
+                                        + columnDifference.columnName()
+                        );
+
+
+                        writeLine(
+                                writer,
+                                "Production : ["
+                                        + columnDifference.productionValue()
+                                        + "]"
+                        );
+
+
+                        writeLine(
+                                writer,
+                                "Migrated   : ["
+                                        + columnDifference.migratedValue()
+                                        + "]"
+                        );
+
+
+                        writer.newLine();
+                    }
+                }
 
 
                 writeLine(
@@ -1388,10 +1613,12 @@ public class PipeFileComparator {
                     "============================================================"
             );
 
+
             writeLine(
                     writer,
                     "VALID RECORDS ONLY IN PRODUCTION"
             );
+
 
             writeLine(
                     writer,
@@ -1401,16 +1628,24 @@ public class PipeFileComparator {
 
             result.remainingProduction()
                     .stream()
-                    .limit(MAX_REPORT_EXAMPLES)
+                    .limit(
+                            MAX_REPORT_EXAMPLES
+                    )
                     .forEach(
                             record -> {
+
                                 try {
+
                                     writeLine(
                                             writer,
                                             record.rawLine()
                                     );
+
                                 } catch (IOException e) {
-                                    throw new UncheckedIOException(e);
+
+                                    throw new UncheckedIOException(
+                                            e
+                                    );
                                 }
                             }
                     );
@@ -1431,10 +1666,12 @@ public class PipeFileComparator {
                     "============================================================"
             );
 
+
             writeLine(
                     writer,
-                    "VALID RECORDS ONLY IN MIGRATED OUTPUT"
+                    "VALID RECORDS ONLY IN MIGRATED"
             );
+
 
             writeLine(
                     writer,
@@ -1444,16 +1681,24 @@ public class PipeFileComparator {
 
             result.remainingMigrated()
                     .stream()
-                    .limit(MAX_REPORT_EXAMPLES)
+                    .limit(
+                            MAX_REPORT_EXAMPLES
+                    )
                     .forEach(
                             record -> {
+
                                 try {
+
                                     writeLine(
                                             writer,
                                             record.rawLine()
                                     );
+
                                 } catch (IOException e) {
-                                    throw new UncheckedIOException(e);
+
+                                    throw new UncheckedIOException(
+                                            e
+                                    );
                                 }
                             }
                     );
@@ -1474,10 +1719,12 @@ public class PipeFileComparator {
                     "============================================================"
             );
 
+
             writeLine(
                     writer,
                     "MALFORMED PRODUCTION RECORDS"
             );
+
 
             writeLine(
                     writer,
@@ -1485,38 +1732,39 @@ public class PipeFileComparator {
             );
 
 
-            for (MalformedRecord malformedRecord
+            for (MalformedRecord malformed
                     : result.productionMalformedRecords()) {
+
 
                 writer.newLine();
 
 
                 writeLine(
                         writer,
-                        "Line number       : "
-                                + malformedRecord.lineNumber()
+                        "Original line number : "
+                                + malformed.lineNumber()
                 );
 
 
                 writeLine(
                         writer,
-                        "Expected columns  : "
-                                + malformedRecord.expectedColumns()
+                        "Expected columns     : "
+                                + malformed.expectedColumns()
                 );
 
 
                 writeLine(
                         writer,
-                        "Actual columns    : "
-                                + malformedRecord.actualColumns()
+                        "Actual columns       : "
+                                + malformed.actualColumns()
                 );
 
 
                 writeLine(
                         writer,
-                        "Difference        : "
+                        "Difference           : "
                                 + formatColumnDifference(
-                                        malformedRecord
+                                        malformed
                                 )
                 );
 
@@ -1529,7 +1777,7 @@ public class PipeFileComparator {
 
                 writeLine(
                         writer,
-                        malformedRecord.rawLine()
+                        malformed.rawLine()
                 );
 
 
@@ -1555,10 +1803,12 @@ public class PipeFileComparator {
                     "============================================================"
             );
 
+
             writeLine(
                     writer,
                     "MALFORMED MIGRATED RECORDS"
             );
+
 
             writeLine(
                     writer,
@@ -1566,38 +1816,39 @@ public class PipeFileComparator {
             );
 
 
-            for (MalformedRecord malformedRecord
+            for (MalformedRecord malformed
                     : result.migratedMalformedRecords()) {
+
 
                 writer.newLine();
 
 
                 writeLine(
                         writer,
-                        "Line number       : "
-                                + malformedRecord.lineNumber()
+                        "Original line number : "
+                                + malformed.lineNumber()
                 );
 
 
                 writeLine(
                         writer,
-                        "Expected columns  : "
-                                + malformedRecord.expectedColumns()
+                        "Expected columns     : "
+                                + malformed.expectedColumns()
                 );
 
 
                 writeLine(
                         writer,
-                        "Actual columns    : "
-                                + malformedRecord.actualColumns()
+                        "Actual columns       : "
+                                + malformed.actualColumns()
                 );
 
 
                 writeLine(
                         writer,
-                        "Difference        : "
+                        "Difference           : "
                                 + formatColumnDifference(
-                                        malformedRecord
+                                        malformed
                                 )
                 );
 
@@ -1610,7 +1861,7 @@ public class PipeFileComparator {
 
                 writeLine(
                         writer,
-                        malformedRecord.rawLine()
+                        malformed.rawLine()
                 );
 
 
@@ -1622,6 +1873,12 @@ public class PipeFileComparator {
         }
     }
 
+
+    /*
+     * ============================================================
+     * MALFORMED COLUMN COUNT DESCRIPTION
+     * ============================================================
+     */
 
     private static String formatColumnDifference(
             MalformedRecord record
@@ -1636,12 +1893,20 @@ public class PipeFileComparator {
 
             return "+"
                     + difference
-                    + " EXTRA column(s)";
+                    + " EXTRA COLUMN(S)";
         }
 
 
-        return Math.abs(difference)
-                + " MISSING column(s)";
+        if (difference < 0) {
+
+            return Math.abs(
+                    difference
+            )
+                    + " MISSING COLUMN(S)";
+        }
+
+
+        return "NONE";
     }
 
 
@@ -1667,15 +1932,19 @@ public class PipeFileComparator {
             String prefix
     ) throws IOException {
 
+
         List<Path> chunkFiles =
                 new ArrayList<>();
 
 
-        try (BufferedReader reader =
-                     Files.newBufferedReader(
-                             inputFile,
-                             StandardCharsets.UTF_8
-                     )) {
+        try (
+                BufferedReader reader =
+                        Files.newBufferedReader(
+                                inputFile,
+                                StandardCharsets.UTF_8
+                        )
+        ) {
+
 
             List<String> chunk =
                     new ArrayList<>(
@@ -1688,11 +1957,15 @@ public class PipeFileComparator {
 
             while ((line = reader.readLine()) != null) {
 
-                chunk.add(line);
+
+                chunk.add(
+                        line
+                );
 
 
                 if (chunk.size()
                         >= SORT_CHUNK_SIZE) {
+
 
                     chunkFiles.add(
                             writeSortedChunk(
@@ -1713,6 +1986,7 @@ public class PipeFileComparator {
 
             if (!chunk.isEmpty()) {
 
+
                 chunkFiles.add(
                         writeSortedChunk(
                                 chunk,
@@ -1726,7 +2000,8 @@ public class PipeFileComparator {
 
         Path sortedOutput =
                 workingDirectory.resolve(
-                        prefix + "_sorted.txt"
+                        prefix
+                                + "_sorted.txt"
                 );
 
 
@@ -1736,10 +2011,9 @@ public class PipeFileComparator {
         );
 
 
-        /*
-         * Delete individual sorted chunks after merge.
-         */
-        for (Path chunkFile : chunkFiles) {
+        for (Path chunkFile
+                : chunkFiles) {
+
 
             Files.deleteIfExists(
                     chunkFile
@@ -1751,13 +2025,22 @@ public class PipeFileComparator {
     }
 
 
+    /*
+     * ============================================================
+     * WRITE SORTED CHUNK
+     * ============================================================
+     */
+
     private static Path writeSortedChunk(
             List<String> records,
             Path workingDirectory,
             String prefix
     ) throws IOException {
 
-        Collections.sort(records);
+
+        Collections.sort(
+                records
+        );
 
 
         Path tempFile =
@@ -1768,15 +2051,23 @@ public class PipeFileComparator {
                 );
 
 
-        try (BufferedWriter writer =
-                     Files.newBufferedWriter(
-                             tempFile,
-                             StandardCharsets.UTF_8
-                     )) {
+        try (
+                BufferedWriter writer =
+                        Files.newBufferedWriter(
+                                tempFile,
+                                StandardCharsets.UTF_8
+                        )
+        ) {
 
-            for (String record : records) {
 
-                writer.write(record);
+            for (String record
+                    : records) {
+
+
+                writer.write(
+                        record
+                );
+
                 writer.newLine();
             }
         }
@@ -1797,16 +2088,19 @@ public class PipeFileComparator {
             Path outputFile
     ) throws IOException {
 
+
         /*
-         * Empty source file.
+         * Handle an empty input file.
          */
         if (chunkFiles.isEmpty()) {
+
 
             Files.writeString(
                     outputFile,
                     "",
                     StandardCharsets.UTF_8
             );
+
 
             return;
         }
@@ -1826,13 +2120,14 @@ public class PipeFileComparator {
 
         try {
 
+
             /*
-             * Open all sorted chunks and push their
-             * first records onto the priority queue.
+             * Open each chunk.
              */
             for (int i = 0;
                  i < chunkFiles.size();
                  i++) {
+
 
                 BufferedReader reader =
                         Files.newBufferedReader(
@@ -1841,7 +2136,9 @@ public class PipeFileComparator {
                         );
 
 
-                readers.add(reader);
+                readers.add(
+                        reader
+                );
 
 
                 String firstLine =
@@ -1849,6 +2146,7 @@ public class PipeFileComparator {
 
 
                 if (firstLine != null) {
+
 
                     queue.add(
                             new MergeEntry(
@@ -1860,14 +2158,17 @@ public class PipeFileComparator {
             }
 
 
-            try (BufferedWriter writer =
-                         Files.newBufferedWriter(
-                                 outputFile,
-                                 StandardCharsets.UTF_8
-                         )) {
+            try (
+                    BufferedWriter writer =
+                            Files.newBufferedWriter(
+                                    outputFile,
+                                    StandardCharsets.UTF_8
+                            )
+            ) {
 
 
                 while (!queue.isEmpty()) {
+
 
                     MergeEntry entry =
                             queue.poll();
@@ -1892,6 +2193,7 @@ public class PipeFileComparator {
 
                     if (nextLine != null) {
 
+
                         queue.add(
                                 new MergeEntry(
                                         nextLine,
@@ -1902,12 +2204,13 @@ public class PipeFileComparator {
                 }
             }
 
+
         } finally {
 
-            /*
-             * Close all readers even if merge fails.
-             */
-            for (BufferedReader reader : readers) {
+
+            for (BufferedReader reader
+                    : readers) {
+
 
                 try {
 
@@ -1922,11 +2225,11 @@ public class PipeFileComparator {
 
     /*
      * ============================================================
-     * RESULT TYPES
+     * DATA TYPES
      * ============================================================
      */
 
-    private record DataRecord(
+    public record DataRecord(
             long id,
             String rawLine,
             String[] values
@@ -1934,7 +2237,7 @@ public class PipeFileComparator {
     }
 
 
-    private record ColumnDifference(
+    public record ColumnDifference(
             int columnNumber,
             String columnName,
             String productionValue,
@@ -1943,7 +2246,7 @@ public class PipeFileComparator {
     }
 
 
-    private record RecordDifference(
+    public record RecordDifference(
             DataRecord production,
             DataRecord migrated,
             List<ColumnDifference> differences
@@ -1951,7 +2254,7 @@ public class PipeFileComparator {
     }
 
 
-    private record MalformedRecord(
+    public record MalformedRecord(
             String source,
             long lineNumber,
             int expectedColumns,
@@ -1961,7 +2264,7 @@ public class PipeFileComparator {
     }
 
 
-    private record ValidationResult(
+    public record ValidationResult(
             long totalRecords,
             long validRecords,
             long invalidRecords,
@@ -1970,13 +2273,13 @@ public class PipeFileComparator {
     }
 
 
-    private record ExactComparisonResult(
+    public record ExactComparisonResult(
             long exactMatches
     ) {
     }
 
 
-    private record FuzzyComparisonResult(
+    public record FuzzyComparisonResult(
             List<RecordDifference> probableMatches,
             List<DataRecord> remainingProduction,
             List<DataRecord> remainingMigrated
@@ -1993,7 +2296,7 @@ public class PipeFileComparator {
 
     /*
      * ============================================================
-     * FINAL RESULT
+     * FINAL COMPARISON RESULT
      * ============================================================
      */
 
@@ -2027,28 +2330,44 @@ public class PipeFileComparator {
 
         public boolean exactDataMatch() {
 
+
             return productionInvalidRecords == 0
-                    && migratedInvalidRecords == 0
-                    && probableMatches == 0
-                    && missingValidRecords == 0
-                    && extraValidRecords == 0
-                    && productionValidRecords
-                    == migratedValidRecords;
+                    &&
+                    migratedInvalidRecords == 0
+                    &&
+                    probableMatches == 0
+                    &&
+                    missingValidRecords == 0
+                    &&
+                    extraValidRecords == 0
+                    &&
+                    productionValidRecords
+                            == migratedValidRecords;
         }
 
 
+        /*
+         * ========================================================
+         * PRINT CONSOLE SUMMARY
+         * ========================================================
+         */
+
         public void printSummary() {
 
+
             System.out.println();
+
 
             System.out.println(
                     "============================================================"
             );
+
 
             System.out.println(
                     "FILE COMPARISON SUMMARY"
             );
 
+
             System.out.println(
                     "============================================================"
             );
@@ -2056,19 +2375,23 @@ public class PipeFileComparator {
 
             System.out.println();
 
+
             System.out.println(
                     "PRODUCTION"
             );
+
 
             System.out.printf(
                     "Total records             : %,d%n",
                     productionTotalRecords
             );
 
+
             System.out.printf(
                     "Valid records             : %,d%n",
                     productionValidRecords
             );
+
 
             System.out.printf(
                     "Malformed records         : %,d%n",
@@ -2078,19 +2401,23 @@ public class PipeFileComparator {
 
             System.out.println();
 
+
             System.out.println(
                     "MIGRATED"
             );
+
 
             System.out.printf(
                     "Total records             : %,d%n",
                     migratedTotalRecords
             );
 
+
             System.out.printf(
                     "Valid records             : %,d%n",
                     migratedValidRecords
             );
+
 
             System.out.printf(
                     "Malformed records         : %,d%n",
@@ -2100,24 +2427,29 @@ public class PipeFileComparator {
 
             System.out.println();
 
+
             System.out.println(
                     "COMPARISON"
             );
+
 
             System.out.printf(
                     "Exact matches             : %,d%n",
                     exactMatches
             );
 
+
             System.out.printf(
                     "Records with differences  : %,d%n",
                     probableMatches
             );
 
+
             System.out.printf(
                     "Missing valid records     : %,d%n",
                     missingValidRecords
             );
+
 
             System.out.printf(
                     "Extra valid records       : %,d%n",
@@ -2132,15 +2464,19 @@ public class PipeFileComparator {
 
             if (exactDataMatch()) {
 
+
                 System.out.println(
                         "RESULT: PASS"
                 );
 
+
                 System.out.println(
-                        "Files contain the same valid records ignoring order."
+                        "All valid records match ignoring record order."
                 );
 
+
             } else {
+
 
                 System.out.println(
                         "RESULT: FAIL"
@@ -2148,34 +2484,39 @@ public class PipeFileComparator {
 
 
                 if (productionInvalidRecords > 0
-                        || migratedInvalidRecords > 0) {
+                        ||
+                        migratedInvalidRecords > 0) {
+
 
                     System.out.println(
-                            "Malformed record(s) were detected."
+                            "- Malformed records detected."
                     );
                 }
 
 
                 if (probableMatches > 0) {
 
+
                     System.out.println(
-                            "Logical records with column differences were detected."
+                            "- Logical records with differences detected."
                     );
                 }
 
 
                 if (missingValidRecords > 0) {
 
+
                     System.out.println(
-                            "Production valid records are missing from migrated output."
+                            "- Production records missing from migrated output."
                     );
                 }
 
 
                 if (extraValidRecords > 0) {
 
+
                     System.out.println(
-                            "Migrated output contains extra valid records."
+                            "- Extra migrated records detected."
                     );
                 }
             }
@@ -2190,7 +2531,7 @@ public class PipeFileComparator {
 
     /*
      * ============================================================
-     * SAMPLE EXECUTION
+     * MAIN
      * ============================================================
      */
 
@@ -2198,6 +2539,10 @@ public class PipeFileComparator {
             String[] args
     ) throws Exception {
 
+
+        /*
+         * CHANGE THESE FOUR PATHS FOR YOUR ENVIRONMENT.
+         */
 
         Path productionFile =
                 Paths.get(
@@ -2237,9 +2582,11 @@ public class PipeFileComparator {
 
         System.out.println();
 
+
         System.out.println(
-                "Detailed report written to:"
+                "Detailed comparison report:"
         );
+
 
         System.out.println(
                 reportFile.toAbsolutePath()
