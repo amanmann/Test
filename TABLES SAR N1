@@ -1,44 +1,1533 @@
-CREATE TABLE dbo.[FRNT_EUC_SiouxFalls_Recollector_tbl_BSADV308_AA]
-(
-    [REPORT]          NVARCHAR(255) NULL,
-    [MASTERCARD]      NVARCHAR(255) NULL,
-    [DATE]            DATE          NULL,
-    [MEMBER ID]       BIGINT        NULL,
-    [TRANSFER AGENT]  BIGINT        NULL,
-    [Amount]          DECIMAL(18,2) NULL,
-    [D/C]             NVARCHAR(255) NULL
-);
+package com.migration.validation;
+
+import java.io.*;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.*;
+import java.util.*;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+
+public class PipeFileComparator {
+
+    /*
+     * ============================================================
+     * CONFIGURATION
+     * ============================================================
+     */
+
+    private static final String DELIMITER = "\\|";
+
+    private static final List<String> COLUMNS = List.of(
+            "MMO",                 // 1
+            "Priority",            // 2
+            "State",               // 3
+            "ClerkID",             // 4
+            "CountryCode",         // 5
+            "Currency",            // 6
+            "EqCurrency",          // 7
+            "Reason",              // 8
+            "PageNumber",          // 9
+            "Statement",           // 10
+            "Branch",              // 11
+            "PayeeNum",            // 12
+            "TaxID",               // 13
+            "Location",            // 14
+            "RefNum",              // 15
+            "RepSerialNum",        // 16
+            "SerialNumber",        // 17
+            "DCIP",                // 18
+            "Zip",                 // 19
+            "CustAcctNum",         // 20
+            "ImageCode",           // 21
+            "CPCS",                // 22
+            "UserText1",           // 23
+            "UserText2",           // 24
+            "Addr1",               // 25
+            "Addr2",               // 26
+            "City",                // 27
+            "Name1",               // 28
+            "Name2",               // 29
+            "Account",             // 30
+            "Company",             // 31
+            "Class",               // 32
+            "Department",          // 33
+            "Amount",              // 34
+            "EqAmount",            // 35
+            "UserAmount1",         // 36
+            "AmountRecov",         // 37
+            "AvgRate",             // 38
+            "Aged",                // 39
+            "DaysRecovered",       // 40
+            "UserNum1",            // 41
+            "UserNum2",            // 42
+            "AvailOrPaid",         // 43
+            "EffectiveDate",       // 44
+            "PostedOrIssue",       // 45
+            "EqDate"               // 46
+    );
+
+    /*
+     * We don't know the actual unique key yet.
+     *
+     * These are candidate "blocking keys".
+     * They are NOT assumed to be unique.
+     *
+     * They are only used to find likely matching records.
+     */
+    private static final List<List<String>> MATCH_PROFILES = List.of(
+
+            List.of(
+                    "RefNum",
+                    "SerialNumber"
+            ),
+
+            List.of(
+                    "CustAcctNum",
+                    "Account",
+                    "RefNum"
+            ),
+
+            List.of(
+                    "CustAcctNum",
+                    "RefNum"
+            ),
+
+            List.of(
+                    "RefNum",
+                    "EffectiveDate"
+            ),
+
+            List.of(
+                    "SerialNumber"
+            ),
+
+            List.of(
+                    "RefNum"
+            )
+    );
+
+    /*
+     * User specifically wants to identify records where maybe
+     * only one or two columns are different.
+     */
+    private static final int MAX_DIFFERENT_COLUMNS = 2;
+
+    /*
+     * Don't let the fuzzy stage accidentally load millions
+     * of records into memory.
+     *
+     * If exact comparison leaves more than this many records
+     * unmatched, investigate first.
+     */
+    private static final int MAX_FUZZY_RECORDS = 500_000;
+
+    private static final int MAX_REPORT_EXAMPLES = 1000;
+
+    /*
+     * Chunk size for external sorting.
+     */
+    private static final int SORT_CHUNK_SIZE = 250_000;
 
 
-"FRNT_EUC_SiouxFalls_Recollector_tbl_BSADV308_AA": {
-  "columns": [
-    {
-      "name": "REPORT",
-      "dataType": "VARCHAR"
-    },
-    {
-      "name": "MASTERCARD",
-      "dataType": "VARCHAR"
-    },
-    {
-      "name": "DATE",
-      "dataType": "DATE_DD_MMM_YYYY"
-    },
-    {
-      "name": "MEMBER ID",
-      "dataType": "BIGINT"
-    },
-    {
-      "name": "TRANSFER AGENT",
-      "dataType": "BIGINT"
-    },
-    {
-      "name": "Amount",
-      "dataType": "DECIMAL"
-    },
-    {
-      "name": "D/C",
-      "dataType": "VARCHAR"
+    /*
+     * ============================================================
+     * MAIN API
+     * ============================================================
+     */
+
+    public static ComparisonResult compare(
+            Path productionFile,
+            Path migratedFile,
+            Path workingDirectory,
+            Path reportFile
+    ) throws IOException {
+
+        Files.createDirectories(workingDirectory);
+
+        Path prodSorted =
+                externalSort(productionFile, workingDirectory, "prod");
+
+        Path migratedSorted =
+                externalSort(migratedFile, workingDirectory, "migrated");
+
+
+        Path unmatchedProd =
+                workingDirectory.resolve("unmatched_production.txt");
+
+        Path unmatchedMigrated =
+                workingDirectory.resolve("unmatched_migrated.txt");
+
+
+        /*
+         * Stage 1:
+         *
+         * Exact order-independent comparison.
+         */
+        ExactComparisonResult exactResult =
+                exactCompare(
+                        prodSorted,
+                        migratedSorted,
+                        unmatchedProd,
+                        unmatchedMigrated
+                );
+
+
+        /*
+         * Stage 2:
+         *
+         * For unmatched records, try identifying records that
+         * are actually the same logical record with 1-2
+         * column differences.
+         */
+        FuzzyComparisonResult fuzzyResult =
+                fuzzyCompare(
+                        unmatchedProd,
+                        unmatchedMigrated
+                );
+
+
+        ComparisonResult result =
+                new ComparisonResult(
+                        exactResult.productionCount,
+                        exactResult.migratedCount,
+                        exactResult.exactMatches,
+
+                        fuzzyResult.probableMatches.size(),
+                        fuzzyResult.remainingProduction.size(),
+                        fuzzyResult.remainingMigrated.size(),
+
+                        fuzzyResult.probableMatches,
+                        fuzzyResult.remainingProduction,
+                        fuzzyResult.remainingMigrated
+                );
+
+
+        writeReport(result, reportFile);
+
+
+        /*
+         * Cleanup sorted files.
+         */
+        Files.deleteIfExists(prodSorted);
+        Files.deleteIfExists(migratedSorted);
+
+
+        return result;
     }
-  ]
+
+
+    /*
+     * ============================================================
+     * STAGE 1 - EXACT COMPARISON
+     * ============================================================
+     */
+
+    private static ExactComparisonResult exactCompare(
+            Path prodSorted,
+            Path migratedSorted,
+            Path unmatchedProd,
+            Path unmatchedMigrated
+    ) throws IOException {
+
+        long prodCount = 0;
+        long migratedCount = 0;
+        long exactMatches = 0;
+
+
+        try (
+                BufferedReader prodReader =
+                        Files.newBufferedReader(
+                                prodSorted,
+                                StandardCharsets.UTF_8
+                        );
+
+                BufferedReader migratedReader =
+                        Files.newBufferedReader(
+                                migratedSorted,
+                                StandardCharsets.UTF_8
+                        );
+
+                BufferedWriter prodUnmatchedWriter =
+                        Files.newBufferedWriter(
+                                unmatchedProd,
+                                StandardCharsets.UTF_8
+                        );
+
+                BufferedWriter migratedUnmatchedWriter =
+                        Files.newBufferedWriter(
+                                unmatchedMigrated,
+                                StandardCharsets.UTF_8
+                        )
+        ) {
+
+            String prod = prodReader.readLine();
+            String migrated = migratedReader.readLine();
+
+
+            while (prod != null || migrated != null) {
+
+                if (prod == null) {
+
+                    migratedCount++;
+
+                    migratedUnmatchedWriter.write(migrated);
+                    migratedUnmatchedWriter.newLine();
+
+                    migrated = migratedReader.readLine();
+
+                    continue;
+                }
+
+
+                if (migrated == null) {
+
+                    prodCount++;
+
+                    prodUnmatchedWriter.write(prod);
+                    prodUnmatchedWriter.newLine();
+
+                    prod = prodReader.readLine();
+
+                    continue;
+                }
+
+
+                int compare = prod.compareTo(migrated);
+
+
+                if (compare == 0) {
+
+                    prodCount++;
+                    migratedCount++;
+                    exactMatches++;
+
+                    prod = prodReader.readLine();
+                    migrated = migratedReader.readLine();
+
+                } else if (compare < 0) {
+
+                    prodCount++;
+
+                    prodUnmatchedWriter.write(prod);
+                    prodUnmatchedWriter.newLine();
+
+                    prod = prodReader.readLine();
+
+                } else {
+
+                    migratedCount++;
+
+                    migratedUnmatchedWriter.write(migrated);
+                    migratedUnmatchedWriter.newLine();
+
+                    migrated = migratedReader.readLine();
+                }
+            }
+        }
+
+
+        return new ExactComparisonResult(
+                prodCount,
+                migratedCount,
+                exactMatches
+        );
+    }
+
+
+    /*
+     * ============================================================
+     * STAGE 2 - COLUMN-AWARE MATCHING
+     * ============================================================
+     */
+
+    private static FuzzyComparisonResult fuzzyCompare(
+            Path unmatchedProdFile,
+            Path unmatchedMigratedFile
+    ) throws IOException {
+
+        List<Record> production =
+                readRecords(unmatchedProdFile);
+
+        List<Record> migrated =
+                readRecords(unmatchedMigratedFile);
+
+
+        if (production.size() > MAX_FUZZY_RECORDS ||
+                migrated.size() > MAX_FUZZY_RECORDS) {
+
+            throw new IllegalStateException(
+                    """
+                    Too many unmatched records for column-level matching.
+
+                    Production unmatched: %d
+                    Migrated unmatched:   %d
+
+                    This probably indicates a major file difference rather than
+                    isolated 1-2 column differences.
+                    """
+                            .formatted(
+                                    production.size(),
+                                    migrated.size()
+                            )
+            );
+        }
+
+
+        /*
+         * Build multiple indexes for migrated records.
+         */
+        List<Map<String, List<Record>>> migratedIndexes =
+                new ArrayList<>();
+
+
+        for (List<String> profile : MATCH_PROFILES) {
+
+            Map<String, List<Record>> index =
+                    buildIndex(
+                            migrated,
+                            profile
+                    );
+
+            migratedIndexes.add(index);
+        }
+
+
+        Set<Long> usedMigratedRecords =
+                new HashSet<>();
+
+
+        List<RecordDifference> probableMatches =
+                new ArrayList<>();
+
+
+        List<Record> remainingProduction =
+                new ArrayList<>();
+
+
+        for (Record prodRecord : production) {
+
+            Set<Record> candidateSet =
+                    new LinkedHashSet<>();
+
+
+            /*
+             * Try each matching profile.
+             */
+            for (int i = 0; i < MATCH_PROFILES.size(); i++) {
+
+                List<String> profile =
+                        MATCH_PROFILES.get(i);
+
+                String key =
+                        buildKey(
+                                prodRecord,
+                                profile
+                        );
+
+
+                /*
+                 * Skip empty keys.
+                 */
+                if (key.isBlank()) {
+                    continue;
+                }
+
+
+                List<Record> candidates =
+                        migratedIndexes
+                                .get(i)
+                                .getOrDefault(
+                                        key,
+                                        Collections.emptyList()
+                                );
+
+
+                for (Record candidate : candidates) {
+
+                    if (!usedMigratedRecords.contains(candidate.id())) {
+                        candidateSet.add(candidate);
+                    }
+                }
+            }
+
+
+            Record bestCandidate = null;
+            List<ColumnDifference> bestDifferences = null;
+
+
+            /*
+             * Compare possible candidates.
+             */
+            for (Record candidate : candidateSet) {
+
+                List<ColumnDifference> differences =
+                        findDifferences(
+                                prodRecord,
+                                candidate
+                        );
+
+
+                if (differences.size()
+                        <= MAX_DIFFERENT_COLUMNS) {
+
+                    if (bestCandidate == null ||
+                            differences.size()
+                                    < bestDifferences.size()) {
+
+                        bestCandidate = candidate;
+                        bestDifferences = differences;
+                    }
+                }
+            }
+
+
+            if (bestCandidate != null) {
+
+                usedMigratedRecords.add(
+                        bestCandidate.id()
+                );
+
+
+                probableMatches.add(
+                        new RecordDifference(
+                                prodRecord,
+                                bestCandidate,
+                                bestDifferences
+                        )
+                );
+
+            } else {
+
+                remainingProduction.add(
+                        prodRecord
+                );
+            }
+        }
+
+
+        List<Record> remainingMigrated =
+                migrated.stream()
+                        .filter(
+                                r ->
+                                        !usedMigratedRecords
+                                                .contains(r.id())
+                        )
+                        .toList();
+
+
+        return new FuzzyComparisonResult(
+                probableMatches,
+                remainingProduction,
+                remainingMigrated
+        );
+    }
+
+
+    /*
+     * ============================================================
+     * FIND COLUMN DIFFERENCES
+     * ============================================================
+     */
+
+    private static List<ColumnDifference> findDifferences(
+            Record production,
+            Record migrated
+    ) {
+
+        List<ColumnDifference> differences =
+                new ArrayList<>();
+
+
+        for (int i = 0; i < COLUMNS.size(); i++) {
+
+            String prodValue =
+                    production.values()[i];
+
+            String migratedValue =
+                    migrated.values()[i];
+
+
+            if (!Objects.equals(
+                    prodValue,
+                    migratedValue
+            )) {
+
+                differences.add(
+                        new ColumnDifference(
+                                i + 1,
+                                COLUMNS.get(i),
+                                prodValue,
+                                migratedValue
+                        )
+                );
+
+
+                /*
+                 * Optimization:
+                 *
+                 * No need to continue if already over our threshold.
+                 */
+                if (differences.size()
+                        > MAX_DIFFERENT_COLUMNS) {
+
+                    break;
+                }
+            }
+        }
+
+
+        return differences;
+    }
+
+
+    /*
+     * ============================================================
+     * INDEXING
+     * ============================================================
+     */
+
+    private static Map<String, List<Record>> buildIndex(
+            List<Record> records,
+            List<String> columns
+    ) {
+
+        Map<String, List<Record>> index =
+                new HashMap<>();
+
+
+        for (Record record : records) {
+
+            String key =
+                    buildKey(
+                            record,
+                            columns
+                    );
+
+
+            if (key.isBlank()) {
+                continue;
+            }
+
+
+            index.computeIfAbsent(
+                    key,
+                    ignored -> new ArrayList<>()
+            ).add(record);
+        }
+
+
+        return index;
+    }
+
+
+    private static String buildKey(
+            Record record,
+            List<String> columns
+    ) {
+
+        StringBuilder key =
+                new StringBuilder();
+
+
+        boolean hasValue = false;
+
+
+        for (String column : columns) {
+
+            int index =
+                    COLUMNS.indexOf(column);
+
+
+            if (index < 0) {
+
+                throw new IllegalArgumentException(
+                        "Unknown column: " + column
+                );
+            }
+
+
+            String value =
+                    record.values()[index];
+
+
+            if (value != null &&
+                    !value.isBlank()) {
+
+                hasValue = true;
+            }
+
+
+            key.append(
+                    normalizeForKey(value)
+            );
+
+            key.append('\u0001');
+        }
+
+
+        return hasValue
+                ? key.toString()
+                : "";
+    }
+
+
+    private static String normalizeForKey(
+            String value
+    ) {
+
+        if (value == null) {
+            return "";
+        }
+
+        return value.trim();
+    }
+
+
+    /*
+     * ============================================================
+     * READ PIPE RECORDS
+     * ============================================================
+     */
+
+    private static List<Record> readRecords(
+            Path path
+    ) throws IOException {
+
+        List<Record> records =
+                new ArrayList<>();
+
+
+        try (BufferedReader reader =
+                     Files.newBufferedReader(
+                             path,
+                             StandardCharsets.UTF_8
+                     )) {
+
+            String line;
+
+            long id = 0;
+
+
+            while ((line = reader.readLine()) != null) {
+
+                id++;
+
+
+                String[] values =
+                        line.split(
+                                DELIMITER,
+                                -1
+                        );
+
+
+                if (values.length != COLUMNS.size()) {
+
+                    throw new IllegalArgumentException(
+                            """
+                            Invalid number of columns.
+
+                            File: %s
+                            Record: %d
+                            Expected columns: %d
+                            Actual columns: %d
+
+                            Record:
+                            %s
+                            """
+                                    .formatted(
+                                            path,
+                                            id,
+                                            COLUMNS.size(),
+                                            values.length,
+                                            line
+                                    )
+                    );
+                }
+
+
+                records.add(
+                        new Record(
+                                id,
+                                line,
+                                values
+                        )
+                );
+            }
+        }
+
+
+        return records;
+    }
+
+
+    /*
+     * ============================================================
+     * REPORT
+     * ============================================================
+     */
+
+    private static void writeReport(
+            ComparisonResult result,
+            Path reportFile
+    ) throws IOException {
+
+        try (BufferedWriter writer =
+                     Files.newBufferedWriter(
+                             reportFile,
+                             StandardCharsets.UTF_8
+                     )) {
+
+            writer.write(
+                    "============================================================"
+            );
+            writer.newLine();
+
+            writer.write(
+                    "FILE COMPARISON REPORT"
+            );
+            writer.newLine();
+
+            writer.write(
+                    "============================================================"
+            );
+            writer.newLine();
+            writer.newLine();
+
+
+            writer.write(
+                    "Production records : "
+                            + result.productionCount()
+            );
+            writer.newLine();
+
+
+            writer.write(
+                    "Migrated records   : "
+                            + result.migratedCount()
+            );
+            writer.newLine();
+
+
+            writer.write(
+                    "Exact matches      : "
+                            + result.exactMatches()
+            );
+            writer.newLine();
+
+
+            writer.write(
+                    "Probable matches   : "
+                            + result.probableMatches()
+            );
+            writer.newLine();
+
+
+            writer.write(
+                    "Missing records    : "
+                            + result.missingRecords()
+            );
+            writer.newLine();
+
+
+            writer.write(
+                    "Extra records      : "
+                            + result.extraRecords()
+            );
+            writer.newLine();
+
+
+            writer.newLine();
+
+
+            /*
+             * Column summary.
+             */
+            Map<String, Long> columnMismatchSummary =
+                    result.differences()
+                            .stream()
+                            .flatMap(
+                                    d ->
+                                            d.differences()
+                                                    .stream()
+                            )
+                            .collect(
+                                    Collectors.groupingBy(
+                                            ColumnDifference::columnName,
+                                            LinkedHashMap::new,
+                                            Collectors.counting()
+                                    )
+                            );
+
+
+            writer.write(
+                    "COLUMN MISMATCH SUMMARY"
+            );
+            writer.newLine();
+
+            writer.write(
+                    "------------------------------------------------------------"
+            );
+            writer.newLine();
+
+
+            columnMismatchSummary
+                    .entrySet()
+                    .stream()
+                    .sorted(
+                            Map.Entry
+                                    .<String, Long>comparingByValue()
+                                    .reversed()
+                    )
+                    .forEach(entry -> {
+
+                        try {
+
+                            writer.write(
+                                    String.format(
+                                            "%-25s : %d",
+                                            entry.getKey(),
+                                            entry.getValue()
+                                    )
+                            );
+
+                            writer.newLine();
+
+                        } catch (IOException e) {
+
+                            throw new UncheckedIOException(e);
+                        }
+                    });
+
+
+            writer.newLine();
+            writer.newLine();
+
+
+            writer.write(
+                    "DETAILED COLUMN DIFFERENCES"
+            );
+            writer.newLine();
+
+            writer.write(
+                    "============================================================"
+            );
+            writer.newLine();
+
+
+            int counter = 0;
+
+
+            for (RecordDifference recordDifference
+                    : result.differences()) {
+
+                if (counter++ >= MAX_REPORT_EXAMPLES) {
+                    break;
+                }
+
+
+                writer.newLine();
+
+                writer.write(
+                        "------------------------------------------------------------"
+                );
+                writer.newLine();
+
+                writer.write(
+                        "PROBABLE RECORD MATCH"
+                );
+                writer.newLine();
+
+                writer.write(
+                        "------------------------------------------------------------"
+                );
+                writer.newLine();
+
+
+                for (ColumnDifference difference
+                        : recordDifference.differences()) {
+
+                    writer.write(
+                            "Column #"
+                                    + difference.columnNumber()
+                                    + " - "
+                                    + difference.columnName()
+                    );
+
+                    writer.newLine();
+
+
+                    writer.write(
+                            "Production : ["
+                                    + difference.productionValue()
+                                    + "]"
+                    );
+
+                    writer.newLine();
+
+
+                    writer.write(
+                            "Migrated   : ["
+                                    + difference.migratedValue()
+                                    + "]"
+                    );
+
+                    writer.newLine();
+
+                    writer.newLine();
+                }
+
+
+                writer.write(
+                        "Production record:"
+                );
+                writer.newLine();
+
+                writer.write(
+                        recordDifference
+                                .production()
+                                .rawLine()
+                );
+
+                writer.newLine();
+
+
+                writer.write(
+                        "Migrated record:"
+                );
+                writer.newLine();
+
+                writer.write(
+                        recordDifference
+                                .migrated()
+                                .rawLine()
+                );
+
+                writer.newLine();
+            }
+
+
+            /*
+             * Completely missing records.
+             */
+            writer.newLine();
+            writer.newLine();
+
+            writer.write(
+                    "RECORDS ONLY IN PRODUCTION"
+            );
+            writer.newLine();
+
+            writer.write(
+                    "============================================================"
+            );
+            writer.newLine();
+
+
+            result.remainingProduction()
+                    .stream()
+                    .limit(MAX_REPORT_EXAMPLES)
+                    .forEach(record -> {
+
+                        try {
+
+                            writer.write(
+                                    record.rawLine()
+                            );
+
+                            writer.newLine();
+
+                        } catch (IOException e) {
+
+                            throw new UncheckedIOException(e);
+                        }
+                    });
+
+
+            /*
+             * Extra migrated records.
+             */
+            writer.newLine();
+            writer.newLine();
+
+            writer.write(
+                    "RECORDS ONLY IN MIGRATED OUTPUT"
+            );
+            writer.newLine();
+
+            writer.write(
+                    "============================================================"
+            );
+            writer.newLine();
+
+
+            result.remainingMigrated()
+                    .stream()
+                    .limit(MAX_REPORT_EXAMPLES)
+                    .forEach(record -> {
+
+                        try {
+
+                            writer.write(
+                                    record.rawLine()
+                            );
+
+                            writer.newLine();
+
+                        } catch (IOException e) {
+
+                            throw new UncheckedIOException(e);
+                        }
+                    });
+        }
+    }
+
+
+    /*
+     * ============================================================
+     * EXTERNAL SORT
+     * ============================================================
+     */
+
+    private static Path externalSort(
+            Path inputFile,
+            Path workingDirectory,
+            String prefix
+    ) throws IOException {
+
+        List<Path> chunks =
+                new ArrayList<>();
+
+
+        try (BufferedReader reader =
+                     Files.newBufferedReader(
+                             inputFile,
+                             StandardCharsets.UTF_8
+                     )) {
+
+            List<String> chunk =
+                    new ArrayList<>(
+                            SORT_CHUNK_SIZE
+                    );
+
+
+            String line;
+
+
+            while ((line = reader.readLine()) != null) {
+
+                chunk.add(line);
+
+
+                if (chunk.size()
+                        >= SORT_CHUNK_SIZE) {
+
+                    chunks.add(
+                            writeChunk(
+                                    chunk,
+                                    workingDirectory,
+                                    prefix
+                            )
+                    );
+
+                    chunk =
+                            new ArrayList<>(
+                                    SORT_CHUNK_SIZE
+                            );
+                }
+            }
+
+
+            if (!chunk.isEmpty()) {
+
+                chunks.add(
+                        writeChunk(
+                                chunk,
+                                workingDirectory,
+                                prefix
+                        )
+                );
+            }
+        }
+
+
+        Path sortedFile =
+                workingDirectory.resolve(
+                        prefix + "_sorted.txt"
+                );
+
+
+        mergeChunks(
+                chunks,
+                sortedFile
+        );
+
+
+        for (Path chunk : chunks) {
+
+            Files.deleteIfExists(chunk);
+        }
+
+
+        return sortedFile;
+    }
+
+
+    private static Path writeChunk(
+            List<String> records,
+            Path workingDirectory,
+            String prefix
+    ) throws IOException {
+
+        Collections.sort(records);
+
+
+        Path temp =
+                Files.createTempFile(
+                        workingDirectory,
+                        prefix + "_",
+                        ".tmp"
+                );
+
+
+        Files.write(
+                temp,
+                records,
+                StandardCharsets.UTF_8
+        );
+
+
+        return temp;
+    }
+
+
+    private static void mergeChunks(
+            List<Path> chunks,
+            Path output
+    ) throws IOException {
+
+        if (chunks.isEmpty()) {
+
+            Files.writeString(
+                    output,
+                    "",
+                    StandardCharsets.UTF_8
+            );
+
+            return;
+        }
+
+
+        List<BufferedReader> readers =
+                new ArrayList<>();
+
+
+        PriorityQueue<MergeEntry> queue =
+                new PriorityQueue<>(
+                        Comparator.comparing(
+                                MergeEntry::line
+                        )
+                );
+
+
+        try {
+
+            for (int i = 0;
+                 i < chunks.size();
+                 i++) {
+
+                BufferedReader reader =
+                        Files.newBufferedReader(
+                                chunks.get(i),
+                                StandardCharsets.UTF_8
+                        );
+
+
+                readers.add(reader);
+
+
+                String line =
+                        reader.readLine();
+
+
+                if (line != null) {
+
+                    queue.add(
+                            new MergeEntry(
+                                    line,
+                                    i
+                            )
+                    );
+                }
+            }
+
+
+            try (BufferedWriter writer =
+                         Files.newBufferedWriter(
+                                 output,
+                                 StandardCharsets.UTF_8
+                         )) {
+
+                while (!queue.isEmpty()) {
+
+                    MergeEntry entry =
+                            queue.poll();
+
+
+                    writer.write(
+                            entry.line()
+                    );
+
+                    writer.newLine();
+
+
+                    BufferedReader reader =
+                            readers.get(
+                                    entry.readerIndex()
+                            );
+
+
+                    String next =
+                            reader.readLine();
+
+
+                    if (next != null) {
+
+                        queue.add(
+                                new MergeEntry(
+                                        next,
+                                        entry.readerIndex()
+                                )
+                        );
+                    }
+                }
+            }
+
+
+        } finally {
+
+            for (BufferedReader reader : readers) {
+
+                try {
+                    reader.close();
+                } catch (IOException ignored) {
+                }
+            }
+        }
+    }
+
+
+    /*
+     * ============================================================
+     * DATA TYPES
+     * ============================================================
+     */
+
+    private record Record(
+            long id,
+            String rawLine,
+            String[] values
+    ) {
+    }
+
+
+    private record ColumnDifference(
+            int columnNumber,
+            String columnName,
+            String productionValue,
+            String migratedValue
+    ) {
+    }
+
+
+    private record RecordDifference(
+            Record production,
+            Record migrated,
+            List<ColumnDifference> differences
+    ) {
+    }
+
+
+    private record MergeEntry(
+            String line,
+            int readerIndex
+    ) {
+    }
+
+
+    private record ExactComparisonResult(
+            long productionCount,
+            long migratedCount,
+            long exactMatches
+    ) {
+    }
+
+
+    private record FuzzyComparisonResult(
+            List<RecordDifference> probableMatches,
+            List<Record> remainingProduction,
+            List<Record> remainingMigrated
+    ) {
+    }
+
+
+    public record ComparisonResult(
+            long productionCount,
+            long migratedCount,
+            long exactMatches,
+            long probableMatches,
+            long missingRecords,
+            long extraRecords,
+            List<RecordDifference> differences,
+            List<Record> remainingProduction,
+            List<Record> remainingMigrated
+    ) {
+
+        public boolean exactMatch() {
+
+            return productionCount == migratedCount
+                    && probableMatches == 0
+                    && missingRecords == 0
+                    && extraRecords == 0;
+        }
+
+
+        public boolean dataMatchWithColumnDifferences() {
+
+            return productionCount == migratedCount
+                    && missingRecords == 0
+                    && extraRecords == 0;
+        }
+
+
+        public void printSummary() {
+
+            System.out.println();
+            System.out.println(
+                    "============================================================"
+            );
+
+            System.out.println(
+                    "FILE COMPARISON SUMMARY"
+            );
+
+            System.out.println(
+                    "============================================================"
+            );
+
+
+            System.out.printf(
+                    "Production records       : %,d%n",
+                    productionCount
+            );
+
+            System.out.printf(
+                    "Migrated records         : %,d%n",
+                    migratedCount
+            );
+
+            System.out.printf(
+                    "Exact matches            : %,d%n",
+                    exactMatches
+            );
+
+            System.out.printf(
+                    "Records with differences : %,d%n",
+                    probableMatches
+            );
+
+            System.out.printf(
+                    "Missing records          : %,d%n",
+                    missingRecords
+            );
+
+            System.out.printf(
+                    "Extra records            : %,d%n",
+                    extraRecords
+            );
+
+
+            System.out.println(
+                    "------------------------------------------------------------"
+            );
+
+
+            if (exactMatch()) {
+
+                System.out.println(
+                        "RESULT: PASS - Files are identical ignoring record order."
+                );
+
+            } else if (dataMatchWithColumnDifferences()) {
+
+                System.out.println(
+                        "RESULT: FAIL - Same logical records found, but column differences exist."
+                );
+
+            } else {
+
+                System.out.println(
+                        "RESULT: FAIL - Missing/extra records and/or column differences found."
+                );
+            }
+
+
+            System.out.println(
+                    "============================================================"
+            );
+        }
+    }
+
+
+    /*
+     * ============================================================
+     * SAMPLE EXECUTION
+     * ============================================================
+     */
+
+    public static void main(
+            String[] args
+    ) throws Exception {
+
+        Path production =
+                Paths.get(
+                        "C:/migration/prod/output.txt"
+                );
+
+
+        Path migrated =
+                Paths.get(
+                        "C:/migration/java/output.txt"
+                );
+
+
+        Path workingDirectory =
+                Paths.get(
+                        "C:/migration/compare-temp"
+                );
+
+
+        Path report =
+                Paths.get(
+                        "C:/migration/comparison-report.txt"
+                );
+
+
+        ComparisonResult result =
+                compare(
+                        production,
+                        migrated,
+                        workingDirectory,
+                        report
+                );
+
+
+        result.printSummary();
+
+
+        System.out.println();
+        System.out.println(
+                "Detailed report: "
+                        + report.toAbsolutePath()
+        );
+    }
 }
