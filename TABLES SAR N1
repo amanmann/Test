@@ -1,47 +1,32 @@
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
+public static int runChildJob(String batFilePath)
+        throws IOException, InterruptedException {
 
-public class FileUtils {
+    ProcessBuilder pb = new ProcessBuilder(
+            "cmd.exe",
+            "/c",
+            batFilePath
+    );
 
-    /**
-     * Copies a file to another directory.
-     *
-     * @param sourceFilePath      Full path of source file
-     * @param destinationFolder   Destination directory
-     * @param newFileName         Optional new file name.
-     *                            Pass null or blank to keep original name.
-     * @return Path of copied destination file
-     */
-    public static Path copyFile(
-            String sourceFilePath,
-            String destinationFolder,
-            String newFileName) throws IOException {
+    pb.redirectErrorStream(true);
 
-        Path source = Path.of(sourceFilePath);
-        Path destinationDir = Path.of(destinationFolder);
+    Process process = pb.start();
 
-        // Create destination directory if it does not exist
-        Files.createDirectories(destinationDir);
+    try (BufferedReader reader =
+                 new BufferedReader(
+                         new InputStreamReader(process.getInputStream()))) {
 
-        String destinationFileName;
+        String line;
 
-        if (newFileName == null || newFileName.isBlank()) {
-            destinationFileName = source.getFileName().toString();
-        } else {
-            destinationFileName = newFileName;
+        while ((line = reader.readLine()) != null) {
+            System.out.println("[CHILD] " + line);
         }
-
-        Path destination =
-                destinationDir.resolve(destinationFileName);
-
-        Files.copy(
-                source,
-                destination,
-                StandardCopyOption.REPLACE_EXISTING
-        );
-
-        return destination;
     }
+
+    int exitCode = process.waitFor();
+
+    System.out.println(
+            "Child job exit code: " + exitCode
+    );
+
+    return exitCode;
 }
