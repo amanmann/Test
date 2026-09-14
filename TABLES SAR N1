@@ -1,36 +1,43 @@
-public static int runChildJob(String batFilePath)
-        throws IOException, InterruptedException {
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
 
-    ProcessBuilder pb = new ProcessBuilder(
-            "cmd.exe",
-            "/c",
-            batFilePath
-    );
+public class ChildJobRunner {
 
-    pb.redirectErrorStream(true);
+    public static int runChildJob(String batFilePath)
+            throws IOException, InterruptedException {
 
-    Process process = pb.start();
+        ProcessBuilder pb = new ProcessBuilder(
+                "cmd.exe",
+                "/c",
+                batFilePath
+        );
 
-    try (BufferedReader reader =
-                 new BufferedReader(
-                         new InputStreamReader(process.getInputStream()))) {
+        pb.redirectErrorStream(true);
 
-        String line;
+        Process process = pb.start();
 
-        while ((line = reader.readLine()) != null) {
-            System.out.println("[CHILD] " + line);
+        try (BufferedReader reader =
+                     new BufferedReader(
+                             new InputStreamReader(
+                                     process.getInputStream()))) {
+
+            String line;
+
+            while ((line = reader.readLine()) != null) {
+                System.out.println("[CHILD] " + line);
+            }
         }
+
+        int exitCode = process.waitFor();
+
+        System.out.println(
+                "Child job exit code: " + exitCode
+        );
+
+        return exitCode;
     }
-
-    int exitCode = process.waitFor();
-
-    System.out.println(
-            "Child job exit code: " + exitCode
-    );
-
-    return exitCode;
 }
-
 
 ***************************
 
