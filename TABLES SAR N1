@@ -30,3 +30,18 @@ public static int runChildJob(String batFilePath)
 
     return exitCode;
 }
+
+
+***************************
+
+int exitCode = runChildJob(
+        "C:\\Jobs\\SAR_N1\\SAR_N1.bat"
+);
+
+if (exitCode != 0) {
+    throw new RuntimeException(
+            "SAR_N1 failed with exit code: " + exitCode
+    );
+}
+
+log.info("SAR_N1 completed successfully.");
