@@ -1,125 +1,143 @@
-package com.orchestrator.config;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.Properties;
+public class FileDateExtractor {
 
-public final class AppConfig {
+    private static final DateTimeFormatter MMDDYYYY =
+            DateTimeFormatter.ofPattern("MMddyyyy");
 
-    private static final Properties PROPERTIES = new Properties();
+    private static final DateTimeFormatter MMDDYY =
+            DateTimeFormatter.ofPattern("MMddyy");
 
-    private AppConfig() {
+
+    // --------------------------------------------------
+    // BCS
+    //
+    // VB:
+    // dteFile = CDate(
+    //      Left(Mid(strFile, 14, 8), 2) & "/" &
+    //      Mid(Mid(strFile, 14, 8), 3, 2) & "/" &
+    //      Mid(Mid(strFile, 14, 8), 5, 4)
+    // )
+    // --------------------------------------------------
+    public static LocalDate getBcsDate(String strFile) {
+
+        // VB Mid(strFile, 14, 8)
+        // Java starts at index 0, so position 14 => index 13
+        String datePart = strFile.substring(13, 21);
+
+        return LocalDate.parse(datePart, MMDDYYYY);
     }
 
-    public static void load(String configFilePath) throws IOException {
 
-        try (InputStream input =
-                     Files.newInputStream(Path.of(configFilePath))) {
+    // --------------------------------------------------
+    // BCOARB
+    //
+    // VB:
+    // dteFile = CDate(
+    //      Left(Right(strFile, 10), 2) & "/" &
+    //      Mid(Right(strFile, 10), 3, 2) & "/" &
+    //      Mid(Right(strFile, 10), 5, 2)
+    // )
+    //
+    // Date is first 6 chars of last 10 chars = MMDDYY
+    // --------------------------------------------------
+    public static LocalDate getBcoarbDate(String strFile) {
 
-            PROPERTIES.clear();
-            PROPERTIES.load(input);
-        }
+        String last10 = strFile.substring(strFile.length() - 10);
+
+        String datePart = last10.substring(0, 6);
+
+        return LocalDate.parse(datePart, MMDDYY);
     }
 
-    public static String get(String key) {
 
-        String value = PROPERTIES.getProperty(key);
+    // --------------------------------------------------
+    // BARBDIT022
+    //
+    // VB:
+    // dteFile = CDate(
+    //      Left(Right(strFile, 12), 2) & "/" &
+    //      Mid(Right(strFile, 12), 3, 2) & "/" &
+    //      Mid(Right(strFile, 12), 5, 4)
+    // )
+    //
+    // Date is first 8 chars of last 12 chars = MMDDYYYY
+    // --------------------------------------------------
+    public static LocalDate getBarbdit022Date(String strFile) {
 
-        if (value == null) {
+        String last12 = strFile.substring(strFile.length() - 12);
+
+        String datePart = last12.substring(0, 8);
+
+        return LocalDate.parse(datePart, MMDDYYYY);
+    }
+
+
+    // --------------------------------------------------
+    // BARACON7
+    //
+    // VB:
+    // dteFile = CDate(
+    //      Left(Mid(strFile, 14, 8), 2) & "/" &
+    //      Mid(Mid(strFile, 14, 8), 3, 2) & "/" &
+    //      Mid(Mid(strFile, 14, 8), 5, 4)
+    // )
+    // --------------------------------------------------
+    public static LocalDate getBaracon7Date(String strFile) {
+
+        String datePart = strFile.substring(13, 21);
+
+        return LocalDate.parse(datePart, MMDDYYYY);
+    }
+
+
+    // --------------------------------------------------
+    // BARAPOP022 - Late Arrivals
+    //
+    // VB:
+    // strMOD = Mid(strFile, InStr(strFile, ".") + 1, 8)
+    //
+    // dteMOD = CDate(
+    //      Left(strMOD, 2) & "/" &
+    //      Mid(strMOD, 3, 2) & "/" &
+    //      Right(strMOD, 4)
+    // )
+    // --------------------------------------------------
+    public static LocalDate getBarapop022Date(String strFile) {
+
+        int dotIndex = strFile.indexOf('.');
+
+        if (dotIndex < 0) {
             throw new IllegalArgumentException(
-                    "Missing configuration property: " + key
-            );
+                    "Expected '.' in BARAPOP022 filename: " + strFile);
         }
 
-        return value.trim();
+        String datePart = strFile.substring(dotIndex + 1, dotIndex + 9);
+
+        return LocalDate.parse(datePart, MMDDYYYY);
     }
 
-    public static String get(String key, String defaultValue) {
-        return PROPERTIES.getProperty(key, defaultValue).trim();
-    }
 
-    public static int getInt(String key) {
-        return Integer.parseInt(get(key));
-    }
+    // --------------------------------------------------
+    // Process Advisements
+    //
+    // VB:
+    // ExportDateString =
+    //      Left(strFile, 2) &
+    //      Mid(strFile, 3, 2) &
+    //      "20" &
+    //      Mid(strFile, 5, 2)
+    //
+    // This returns MMDDYYYY as a String,
+    // rather than a Date.
+    // --------------------------------------------------
+    public static String getProcessAdvisementsDateString(String strFile) {
 
-    public static boolean getBoolean(String key) {
-        return Boolean.parseBoolean(get(key));
-    }
-}
+        String month = strFile.substring(0, 2);
+        String day   = strFile.substring(2, 4);
+        String year  = strFile.substring(4, 6);
 
-
-********************************************************************************************
-
-public class Orchestrator {
-
-    public static void main(String[] args) {
-
-        if (args.length < 1) {
-            System.err.println(
-                    "Usage: java -jar orchestrator.jar <config-file>"
-            );
-            System.exit(1);
-        }
-
-        try {
-
-            AppConfig.load(args[0]);
-
-            System.out.println(
-                    "Configuration loaded from: " + args[0]
-            );
-
-            MSSQLConnector connector =
-                    new MSSQLConnector();
-
-            // Continue orchestrator processing...
-
-        } catch (Exception e) {
-
-            e.printStackTrace();
-            System.exit(1);
-        }
+        return month + day + "20" + year;
     }
 }
-
-
-***************************************************
-
-
-public MSSQLConnector() throws SQLException {
-
-    String host =
-            AppConfig.get("db.host");
-
-    String port =
-            AppConfig.get("db.port");
-
-    String database =
-            AppConfig.get("db.database");
-
-    String username =
-            AppConfig.get("db.username");
-
-    String password =
-            AppConfig.get("db.password");
-
-    String url =
-            "jdbc:jtds:sqlserver://" +
-            host + ":" +
-            port + "/" +
-            database;
-
-    this.connection =
-            DriverManager.getConnection(
-                    url,
-                    username,
-                    password
-            );
-
-    System.out.println(
-            "Connected to MSSQL database."
-    );
-}
-*****************************
