@@ -1,109 +1,47 @@
-public class OutputFileNameGenerator {
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 
-    private static String mmddyyyyToYyyymmdd(String date) {
+public class FileUtils {
 
-        return date.substring(4, 8)
-                + date.substring(0, 2)
-                + date.substring(2, 4);
-    }
+    /**
+     * Copies a file to another directory.
+     *
+     * @param sourceFilePath      Full path of source file
+     * @param destinationFolder   Destination directory
+     * @param newFileName         Optional new file name.
+     *                            Pass null or blank to keep original name.
+     * @return Path of copied destination file
+     */
+    public static Path copyFile(
+            String sourceFilePath,
+            String destinationFolder,
+            String newFileName) throws IOException {
 
-    private static String mmddyyToYyyymmdd(String date) {
+        Path source = Path.of(sourceFilePath);
+        Path destinationDir = Path.of(destinationFolder);
 
-        return "20"
-                + date.substring(4, 6)
-                + date.substring(0, 2)
-                + date.substring(2, 4);
-    }
+        // Create destination directory if it does not exist
+        Files.createDirectories(destinationDir);
 
-    private static String mmddyyToMmddyyyy(String date) {
+        String destinationFileName;
 
-        return date.substring(0, 4)
-                + "20"
-                + date.substring(4, 6);
-    }
+        if (newFileName == null || newFileName.isBlank()) {
+            destinationFileName = source.getFileName().toString();
+        } else {
+            destinationFileName = newFileName;
+        }
 
+        Path destination =
+                destinationDir.resolve(destinationFileName);
 
-    public static String generateBcss0260Output(String inputFile) {
-
-        String date = extract8DigitDateAfterLastUnderscore(inputFile);
-
-        return "SF3_BCS_0260-O01_Activity"
-                + mmddyyyyToYyyymmdd(date)
-                + ".txt";
-    }
-
-
-    public static String generateBcsa0260Output(String inputFile) {
-
-        String date = extract8DigitDateAfterLastUnderscore(inputFile);
-
-        return "SF3_BCSA0260-O01_Activity"
-                + mmddyyyyToYyyymmdd(date)
-                + ".txt";
-    }
-
-
-    public static String generateBcoarb7sOutput(String inputFile) {
-
-        int index = inputFile.lastIndexOf('_');
-
-        String date =
-                inputFile.substring(index + 1, index + 7);
-
-        return "SF3_BCOARB7S-O01_Activity"
-                + mmddyyToYyyymmdd(date)
-                + ".txt";
-    }
-
-
-    public static String generateBareditoOutput(String inputFile) {
-
-        String date = extract8DigitDateAfterLastUnderscore(inputFile);
-
-        return "SF4_BAREDITO-22_Activity"
-                + mmddyyyyToYyyymmdd(date)
-                + ".txt";
-    }
-
-
-    public static String generateBaracon7Output(String inputFile) {
-
-        String date = extract8DigitDateAfterLastUnderscore(inputFile);
-
-        return "SF3_BARACON7_Activity"
-                + mmddyyyyToYyyymmdd(date)
-                + ".txt";
-    }
-
-
-    public static String generateBarae08pOutput(String inputFile) {
-
-        String date = extract8DigitDateAfterLastUnderscore(inputFile);
-
-        return "SF3_BARAE08P-O22_Activity"
-                + mmddyyyyToYyyymmdd(date)
-                + ".txt";
-    }
-
-
-    public static String generateMcAdvisementsOutput(String inputFile) {
-
-        String date = inputFile.substring(0, 6);
-
-        return "SF4_BSADV308-AA_"
-                + mmddyyToMmddyyyy(date)
-                + ".txt";
-    }
-
-
-    private static String extract8DigitDateAfterLastUnderscore(
-            String inputFile) {
-
-        int index = inputFile.lastIndexOf('_');
-
-        return inputFile.substring(
-                index + 1,
-                index + 9
+        Files.copy(
+                source,
+                destination,
+                StandardCopyOption.REPLACE_EXISTING
         );
+
+        return destination;
     }
 }
