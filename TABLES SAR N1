@@ -1,54 +1,223 @@
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
+import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.DirectoryStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 
-public class ChildJobRunner {
+public class FileUtils {
 
-    public static int runChildJob(String batFilePath)
-            throws IOException, InterruptedException {
+    /**
+     * Checks whether a directory exists.
+     * If it does not exist, creates it including any parent directories.
+     */
+    public static Path checkAndCreatePath(String directoryPath) throws IOException {
 
-        ProcessBuilder pb = new ProcessBuilder(
-                "cmd.exe",
-                "/c",
-                batFilePath
-        );
+        Path path = Path.of(directoryPath);
 
-        pb.redirectErrorStream(true);
-
-        Process process = pb.start();
-
-        try (BufferedReader reader =
-                     new BufferedReader(
-                             new InputStreamReader(
-                                     process.getInputStream()))) {
-
-            String line;
-
-            while ((line = reader.readLine()) != null) {
-                System.out.println("[CHILD] " + line);
-            }
+        if (!Files.exists(path)) {
+            Files.createDirectories(path);
         }
 
-        int exitCode = process.waitFor();
+        if (!Files.isDirectory(path)) {
+            throw new IOException(
+                    "Path exists but is not a directory: " + directoryPath
+            );
+        }
 
-        System.out.println(
-                "Child job exit code: " + exitCode
+        return path;
+    }
+
+
+    /**
+     * Copies a file to another directory.
+     *
+     * newFileName:
+     *   null/blank -> retain original filename
+     *   provided   -> rename destination file
+     *
+     * Existing destination file will be replaced.
+     */
+    public static Path copyFile(
+            String sourceFilePath,
+            String destinationFolder,
+            String newFileName) throws IOException {
+
+        Path source = Path.of(sourceFilePath);
+
+        if (!Files.exists(source)) {
+            throw new IOException(
+                    "Source file does not exist: " + sourceFilePath
+            );
+        }
+
+        if (!Files.isRegularFile(source)) {
+            throw new IOException(
+                    "Source is not a file: " + sourceFilePath
+            );
+        }
+
+        Path destinationDir =
+                checkAndCreatePath(destinationFolder);
+
+        String destinationFileName =
+                (newFileName == null || newFileName.isBlank())
+                        ? source.getFileName().toString()
+                        : newFileName;
+
+        Path destination =
+                destinationDir.resolve(destinationFileName);
+
+        Files.copy(
+                source,
+                destination,
+                StandardCopyOption.REPLACE_EXISTING
         );
 
-        return exitCode;
+        return destination;
+    }
+
+
+    /**
+     * Moves a file to another directory.
+     *
+     * This is intended for archival.
+     *
+     * The source file is NOT manually deleted.
+     * Files.move() performs the move operation.
+     *
+     * newFileName:
+     *   null/blank -> retain original filename
+     *   provided   -> rename while moving
+     *
+     * IMPORTANT:
+     * This method does NOT overwrite an existing archive file.
+     * This avoids accidentally destroying an existing archived file.
+     */
+    public static Path moveFile(
+            String sourceFilePath,
+            String destinationFolder,
+            String newFileName) throws IOException {
+
+        Path source = Path.of(sourceFilePath);
+
+        if (!Files.exists(source)) {
+            throw new IOException(
+                    "Source file does not exist: " + sourceFilePath
+            );
+        }
+
+        if (!Files.isRegularFile(source)) {
+            throw new IOException(
+                    "Source is not a file: " + sourceFilePath
+            );
+        }
+
+        Path destinationDir =
+                checkAndCreatePath(destinationFolder);
+
+        String destinationFileName =
+                (newFileName == null || newFileName.isBlank())
+                        ? source.getFileName().toString()
+                        : newFileName;
+
+        Path destination =
+                destinationDir.resolve(destinationFileName);
+
+        /*
+         * For archival, don't silently replace an existing file.
+         */
+        if (Files.exists(destination)) {
+            throw new IOException(
+                    "Destination file already exists: " + destination
+            );
+        }
+
+        try {
+
+            /*
+             * Atomic move is safest where supported.
+             */
+            return Files.move(
+                    source,
+                    destination,
+                    StandardCopyOption.ATOMIC_MOVE
+            );
+
+        } catch (AtomicMoveNotSupportedException e) {
+
+            /*
+             * This can happen when moving between different drives,
+             * network locations, file systems, etc.
+             *
+             * Files.move() will handle the move without us manually
+             * deleting the source.
+             */
+            return Files.move(
+                    source,
+                    destination
+            );
+        }
+    }
+
+
+    /**
+     * Deletes all FILES directly inside a directory.
+     *
+     * The directory itself is NOT deleted.
+     * Subdirectories are NOT deleted.
+     */
+    public static void cleanDirectory(String directoryPath) throws IOException {
+
+        Path directory = Path.of(directoryPath);
+
+        if (!Files.exists(directory)) {
+            return;
+        }
+
+        if (!Files.isDirectory(directory)) {
+            throw new IOException(
+                    "Path is not a directory: " + directoryPath
+            );
+        }
+
+        try (DirectoryStream<Path> stream =
+                     Files.newDirectoryStream(directory)) {
+
+            for (Path path : stream) {
+
+                if (Files.isRegularFile(path)) {
+                    Files.delete(path);
+                }
+            }
+        }
     }
 }
 
-***************************
 
-int exitCode = runChildJob(
-        "C:\\Jobs\\SAR_N1\\SAR_N1.bat"
+************************************
+FileUtils.moveFile(
+        "C:\\ProcessSAR\\Output\\result.txt",
+        "C:\\ProcessSAR\\Archive",
+        null
 );
 
-if (exitCode != 0) {
-    throw new RuntimeException(
-            "SAR_N1 failed with exit code: " + exitCode
-    );
-}
+For renaming destination file  :-
+FileUtils.moveFile(
+        "C:\\ProcessSAR\\Output\\result.txt",
+        "C:\\ProcessSAR\\Archive",
+        "result_20260914.txt"
+);
+*************************************
+FileUtils.checkAndCreatePath(outputPath);
+FileUtils.checkAndCreatePath(archivePath);
 
-log.info("SAR_N1 completed successfully.");
+FileUtils.cleanDirectory(outputPath);
+
+// process files...
+
+FileUtils.moveFile(
+        processedInputFile,
+        archivePath,
+        null
+);
