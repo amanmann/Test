@@ -1,63 +1,45 @@
-/**
- * Moves a file to another directory.
- *
- * @param sourceFilePath     Source file
- * @param destinationFolder  Destination directory
- * @param newFileName        New filename; null/blank keeps original name
- * @param replaceExisting    If true, replaces existing destination file
- *                           If false, throws an exception if it exists
- */
-public static Path moveFile(
-        String sourceFilePath,
-        String destinationFolder,
-        String newFileName,
-        boolean replaceExisting) throws IOException {
+List<String> flowExecutionList =
+        Arrays.stream(AppConfig.get("FLOW_EXECUTION_LIST").split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .toList();
 
-    Path source = Path.of(sourceFilePath);
+for (String flow : flowExecutionList) {
 
-    if (!Files.exists(source)) {
-        throw new IOException(
-                "Source file does not exist: " + sourceFilePath
-        );
-    }
+    try {
+        logger.info("Starting flow: {}", flow);
 
-    if (!Files.isRegularFile(source)) {
-        throw new IOException(
-                "Source is not a file: " + sourceFilePath
-        );
-    }
+        switch (flow.toUpperCase()) {
 
-    Path destinationDir =
-            checkAndCreatePath(destinationFolder);
+            case "SAR_N1":
+                Process.SAR_N1_Orchestrator(connector);
+                break;
 
-    String destinationFileName =
-            (newFileName == null || newFileName.isBlank())
-                    ? source.getFileName().toString()
-                    : newFileName;
+            case "SAR_S1":
+                Process.SAR_S1_Orchestrator(connector);
+                break;
 
-    Path destination =
-            destinationDir.resolve(destinationFileName);
+            case "SAR_S1_LATEARRIVALS":
+                Process.SAR_S1_LateArrivals_Orchestrator(connector);
+                break;
 
-    /*
-     * Build move options based on configuration.
-     */
-    if (replaceExisting) {
+            case "MC_ADVISEMENTS":
+                Process.MC_Advisements_Orchestrator(connector);
+                break;
 
-        return Files.move(
-                source,
-                destination,
-                StandardCopyOption.REPLACE_EXISTING
-        );
+            default:
+                logger.warn("Unknown flow in FLOW_EXECUTION_LIST: {}", flow);
+                break;
+        }
 
-    } else {
+        logger.info("Completed flow: {}", flow);
 
-        /*
-         * No REPLACE_EXISTING means an existing destination
-         * will cause the move to fail.
-         */
-        return Files.move(
-                source,
-                destination
+    } catch (Exception e) {
+
+        logger.error(
+                "Flow {} failed. Continuing with remaining flows.",
+                flow,
+                e
         );
     }
 }
