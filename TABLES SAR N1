@@ -1,1 +1,23 @@
-powershell -NoProfile -Command "Get-ChildItem -File '*07312026*' | Rename-Item -NewName { $_.Name -replace '07312026','10312026' }"
+private Path findByPrefixSuffix(
+        Path folder,
+        String prefix,
+        String suffix) throws IOException {
+
+    try (DirectoryStream<Path> stream = Files.newDirectoryStream(folder)) {
+
+        for (Path path : stream) {
+
+            if (!Files.isRegularFile(path)) {
+                continue;
+            }
+
+            String fileName = path.getFileName().toString();
+
+            if (fileName.startsWith(prefix) && fileName.endsWith(suffix)) {
+                return path;
+            }
+        }
+    }
+
+    return null;
+}
