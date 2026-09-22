@@ -1,23 +1,30 @@
 private Path findByPrefixSuffix(
-        Path folder,
+        List<Path> folders,
         String prefix,
         String suffix) throws IOException {
 
-    try (DirectoryStream<Path> stream = Files.newDirectoryStream(folder)) {
+    for (Path folder : folders) {
 
-        for (Path path : stream) {
+        if (folder == null || !Files.isDirectory(folder)) {
+            continue;
+        }
 
-            if (!Files.isRegularFile(path)) {
-                continue;
-            }
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(folder)) {
 
-            String fileName = path.getFileName().toString();
+            for (Path path : stream) {
 
-            if (fileName.startsWith(prefix) && fileName.endsWith(suffix)) {
-                return path;
+                if (!Files.isRegularFile(path)) {
+                    continue;
+                }
+
+                String fileName = path.getFileName().toString();
+
+                if (fileName.startsWith(prefix) && fileName.endsWith(suffix)) {
+                    return path;   // First match → immediately return
+                }
             }
         }
     }
 
-    return null;
+    return null; // Nothing found in any folder
 }
