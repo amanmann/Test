@@ -1,45 +1,42 @@
-List<String> flowExecutionList =
-        Arrays.stream(AppConfig.get("FLOW_EXECUTION_LIST").split(","))
-                .map(String::trim)
-                .filter(s -> !s.isEmpty())
-                .toList();
+private List<Path> findAll(Path folder, String glob, List<String> excludes) throws IOException {
 
-for (String flow : flowExecutionList) {
+    List<Path> matches = new ArrayList<>();
 
-    try {
-        logger.info("Starting flow: {}", flow);
-
-        switch (flow.toUpperCase()) {
-
-            case "SAR_N1":
-                Process.SAR_N1_Orchestrator(connector);
-                break;
-
-            case "SAR_S1":
-                Process.SAR_S1_Orchestrator(connector);
-                break;
-
-            case "SAR_S1_LATEARRIVALS":
-                Process.SAR_S1_LateArrivals_Orchestrator(connector);
-                break;
-
-            case "MC_ADVISEMENTS":
-                Process.MC_Advisements_Orchestrator(connector);
-                break;
-
-            default:
-                logger.warn("Unknown flow in FLOW_EXECUTION_LIST: {}", flow);
-                break;
-        }
-
-        logger.info("Completed flow: {}", flow);
-
-    } catch (Exception e) {
-
-        logger.error(
-                "Flow {} failed. Continuing with remaining flows.",
-                flow,
-                e
-        );
+    if (folder == null || !Files.isDirectory(folder)) {
+        return matches;
     }
+
+    try (DirectoryStream<Path> stream = Files.newDirectoryStream(folder, glob)) {
+
+        for (Path path : stream) {
+
+            String fileName = path.getFileName()
+                    .toString()
+                    .toUpperCase(Locale.ROOT);
+
+            boolean excluded = false;
+
+            for (String exclude : excludes) {
+                if (fileName.contains(exclude.toUpperCase(Locale.ROOT))) {
+                    excluded = true;
+                    break;
+                }
+            }
+
+            if (!excluded && Files.isRegularFile(path)) {
+                matches.add(path);
+            }
+        }
+    }
+
+    if (matches.isEmpty()) {
+        logger.info("WARN No files matched pattern '" + glob
+                + "' under '" + folder + "'");
+    } else {
+        logger.info("Found " + matches.size()
+                + " file(s) matching pattern '" + glob
+                + "' under '" + folder + "'");
+    }
+
+    return matches;
 }
