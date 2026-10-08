@@ -1,30 +1,391 @@
-private Path findByPrefixSuffix(
-        List<Path> folders,
-        String prefix,
-        String suffix) throws IOException {
 
-    for (Path folder : folders) {
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.*;
+import java.util.*;
 
-        if (folder == null || !Files.isDirectory(folder)) {
-            continue;
-        }
+public class PipeFileComparator {
 
-        try (DirectoryStream<Path> stream = Files.newDirectoryStream(folder)) {
+    public static void main(String[] args) {
+        // Update these paths
+        Path prodFile = Paths.get(
+                "C:/files/prod/customer_data.txt");
 
-            for (Path path : stream) {
+        Path localFile = Paths.get(
+                "C:/files/local/customer_data.txt");
 
-                if (!Files.isRegularFile(path)) {
-                    continue;
-                }
-
-                String fileName = path.getFileName().toString();
-
-                if (fileName.startsWith(prefix) && fileName.endsWith(suffix)) {
-                    return path;   // First match → immediately return
-                }
-            }
+        try {
+            compareFiles(prodFile, localFile);
+        } catch (IOException e) {
+            System.err.println(
+                    "Comparison failed: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 
-    return null; // Nothing found in any folder
+    public static void compareFiles(
+            Path prodFile,
+            Path localFile) throws IOException {
+
+        if (!Files.isRegularFile(prodFile)) {
+            throw new IOException(
+                    "Prod file not found: " + prodFile);
+        }
+
+        if (!Files.isRegularFile(localFile)) {
+            throw new IOException(
+                    "Local file not found: " + localFile);
+        }
+
+        // Read records and their occurrence counts
+        Map<String, Long> prodRecords =
+                readRecordCounts(prodFile);
+
+        Map<String, Long> localRecords =
+                readRecordCounts(localFile);
+
+        Map<String, Long> missingInLocal =
+                new TreeMap<>();
+
+        Map<String, Long> extraInLocal =
+                new TreeMap<>();
+
+        long matchingCount = 0;
+
+        // Compare all Prod records against Local
+        for (Map.Entry<String, Long> entry :
+                prodRecords.entrySet()) {
+
+            String record = entry.getKey();
+            long prodCount = entry.getValue();
+
+            long localCount =
+                    localRecords.getOrDefault(record, 0L);
+
+            matchingCount += Math.min(
+                    prodCount, localCount);
+
+            if (prodCount > localCount) {
+                missingInLocal.put(
+                        record, prodCount - localCount);
+            }
+        }
+
+        // Find records extra in Local
+        for (Map.Entry<String, Long> entry :
+                localRecords.entrySet()) {
+
+            String record = entry.getKey();
+            long localCount = entry.getValue();
+
+            long prodCount =
+                    prodRecords.getOrDefault(record, 0L);
+
+            if (localCount > prodCount) {
+                extraInLocal.put(
+                        record, localCount - prodCount);
+            }
+        }
+
+        long prodTotal = getTotalCount(prodRecords);
+        long localTotal = getTotalCount(localRecords);
+
+        long missingTotal = getTotalCount(missingInLocal);
+        long extraTotal = getTotalCount(extraInLocal);
+
+        boolean identical =
+                missingInLocal.isEmpty()
+                && extraInLocal.isEmpty();
+
+        Path reportFile =
+                createReportFileName(localFile);
+
+        writeReport(
+                prodFile,
+                localFile,
+                reportFile,
+                prodRecords,
+                localRecords,
+                missingInLocal,
+                extraInLocal,
+                prodTotal,
+                localTotal,
+                matchingCount,
+                missingTotal,
+                extraTotal,
+                identical
+        );
+
+        System.out.println(
+                "==================================");
+        System.out.println("FILE COMPARISON COMPLETED");
+        System.out.println(
+                "==================================");
+
+        System.out.println("Prod records    : " + prodTotal);
+        System.out.println("Local records   : " + localTotal);
+        System.out.println("Matching records: " + matchingCount);
+        System.out.println("Missing records : " + missingTotal);
+        System.out.println("Extra records   : " + extraTotal);
+
+        System.out.println(
+                "Result          : "
+                + (identical ? "MATCH" : "MISMATCH"));
+
+        System.out.println(
+                "Report generated: "
+                + reportFile.toAbsolutePath());
+    }
+
+    /**
+     * Reads the file and counts occurrences
+     * of each complete record.
+     *
+     * Row order is ignored.
+     * Duplicate records are preserved via counts.
+     */
+    private static Map<String, Long> readRecordCounts(
+            Path file) throws IOException {
+
+        Map<String, Long> records = new HashMap<>();
+
+        try (BufferedReader reader =
+                     Files.newBufferedReader(
+                             file, StandardCharsets.UTF_8)) {
+
+            String line;
+
+            while ((line = reader.readLine()) != null) {
+
+                // Compare entire pipe-separated row exactly
+                records.merge(line, 1L, Long::sum);
+            }
+        }
+
+        return records;
+    }
+
+    /**
+     * Returns total number of records,
+     * including duplicates.
+     */
+    private static long getTotalCount(
+            Map<String, Long> records) {
+
+        return records.values()
+                .stream()
+                .mapToLong(Long::longValue)
+                .sum();
+    }
+
+    /**
+     * Creates:
+     * customer_data_comparison_report.txt
+     */
+    private static Path createReportFileName(
+            Path localFile) {
+
+        String fileName =
+                localFile.getFileName().toString();
+
+        int extensionIndex =
+                fileName.lastIndexOf('.');
+
+        String baseName =
+                extensionIndex > 0
+                        ? fileName.substring(
+                                0, extensionIndex)
+                        : fileName;
+
+        String reportName =
+                baseName + "_comparison_report.txt";
+
+        Path parent = localFile.getParent();
+
+        return parent == null
+                ? Paths.get(reportName)
+                : parent.resolve(reportName);
+    }
+
+    /**
+     * Writes the final reconciliation report.
+     */
+    private static void writeReport(
+            Path prodFile,
+            Path localFile,
+            Path reportFile,
+            Map<String, Long> prodRecords,
+            Map<String, Long> localRecords,
+            Map<String, Long> missingInLocal,
+            Map<String, Long> extraInLocal,
+            long prodTotal,
+            long localTotal,
+            long matchingCount,
+            long missingTotal,
+            long extraTotal,
+            boolean identical) throws IOException {
+
+        try (BufferedWriter writer =
+                     Files.newBufferedWriter(
+                             reportFile,
+                             StandardCharsets.UTF_8,
+                             StandardOpenOption.CREATE,
+                             StandardOpenOption.TRUNCATE_EXISTING)) {
+
+            writer.write(
+                    "========================================");
+            writer.newLine();
+            writer.write("       FILE COMPARISON REPORT");
+            writer.newLine();
+            writer.write(
+                    "========================================");
+            writer.newLine();
+
+            writer.write("Prod File  : "
+                    + prodFile.toAbsolutePath());
+            writer.newLine();
+
+            writer.write("Local File : "
+                    + localFile.toAbsolutePath());
+            writer.newLine();
+            writer.newLine();
+
+            writer.write("COMPARISON RULES");
+            writer.newLine();
+            writer.write("----------------------------------------");
+            writer.newLine();
+            writer.write("Row order          : IGNORED");
+            writer.newLine();
+            writer.write("Record comparison  : EXACT");
+            writer.newLine();
+            writer.write("Duplicate counts   : CONSIDERED");
+            writer.newLine();
+            writer.write("Whitespace         : CONSIDERED");
+            writer.newLine();
+            writer.write("Case sensitivity   : ENABLED");
+            writer.newLine();
+            writer.newLine();
+
+            // Summary
+            writer.write(
+                    "========================================");
+            writer.newLine();
+            writer.write("SUMMARY");
+            writer.newLine();
+            writer.write(
+                    "========================================");
+            writer.newLine();
+
+            writer.write("Prod total records    : " + prodTotal);
+            writer.newLine();
+
+            writer.write("Local total records   : " + localTotal);
+            writer.newLine();
+
+            writer.write("Prod unique records   : "
+                    + prodRecords.size());
+            writer.newLine();
+
+            writer.write("Local unique records  : "
+                    + localRecords.size());
+            writer.newLine();
+
+            writer.write("Matching records      : "
+                    + matchingCount);
+            writer.newLine();
+
+            writer.write("Missing records       : "
+                    + missingTotal);
+            writer.newLine();
+
+            writer.write("Extra records         : "
+                    + extraTotal);
+            writer.newLine();
+
+            writer.write("Missing record types  : "
+                    + missingInLocal.size());
+            writer.newLine();
+
+            writer.write("Extra record types    : "
+                    + extraInLocal.size());
+            writer.newLine();
+
+            writer.newLine();
+
+            // Missing records
+            writer.write(
+                    "========================================");
+            writer.newLine();
+            writer.write("RECORDS MISSING IN LOCAL");
+            writer.newLine();
+            writer.write(
+                    "========================================");
+            writer.newLine();
+
+            if (missingInLocal.isEmpty()) {
+                writer.write("NONE");
+                writer.newLine();
+            } else {
+                for (Map.Entry<String, Long> entry :
+                        missingInLocal.entrySet()) {
+
+                    writer.write(
+                            "[Missing count: "
+                            + entry.getValue()
+                            + "] "
+                            + entry.getKey());
+
+                    writer.newLine();
+                }
+            }
+
+            writer.newLine();
+
+            // Extra records
+            writer.write(
+                    "========================================");
+            writer.newLine();
+            writer.write("EXTRA RECORDS IN LOCAL");
+            writer.newLine();
+            writer.write(
+                    "========================================");
+            writer.newLine();
+
+            if (extraInLocal.isEmpty()) {
+                writer.write("NONE");
+                writer.newLine();
+            } else {
+                for (Map.Entry<String, Long> entry :
+                        extraInLocal.entrySet()) {
+
+                    writer.write(
+                            "[Extra count: "
+                            + entry.getValue()
+                            + "] "
+                            + entry.getKey());
+
+                    writer.newLine();
+                }
+            }
+
+            writer.newLine();
+
+            writer.write(
+                    "========================================");
+            writer.newLine();
+
+            writer.write("FINAL RESULT: "
+                    + (identical
+                            ? "FILES MATCH"
+                            : "FILES DO NOT MATCH"));
+
+            writer.newLine();
+
+            writer.write(
+                    "========================================");
+            writer.newLine();
+        }
+    }
 }
