@@ -1,4 +1,12 @@
 SELECT
+    t.Notional_Account,
+    t.Ccy,
+    t.Notional_Affiliate,
     SUM(CAST(t.Notional_USD AS FLOAT(53))) AS FloatSum,
     SUM(t.Notional_USD) AS DecimalSum
-FROM dbo.FRNT_EUC_FRNT_EUC_SFRecollector_ProcessSummit_tbl_Summit_MBAR_ME t;
+FROM dbo.FRNT_EUC_FRNT_EUC_SFRecollector_ProcessSummit_tbl_Summit_MBAR_ME t
+WHERE t.Ccy = 'USD'
+GROUP BY
+    t.Notional_Account,
+    t.Ccy,
+    t.Notional_Affiliate;
