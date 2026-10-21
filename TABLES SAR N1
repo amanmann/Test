@@ -1,7 +1,4 @@
 SELECT
-    s.Account,
-    s.Amount AS RawAmount,
-    ROUND(s.Amount, 2, 1) AS TruncatedAmount,
-    ROUND(s.Amount, 2) AS RoundedAmount
-FROM dbo.FRNT_EUC_FRNT_EUC_SFRecollector_ProcessSummit_vw_quniSummit_MBAR_ME s
-WHERE s.Amount BETWEEN 4199999999.98 AND 4200000000.02;
+    SUM(CAST(t.Notional_USD AS FLOAT(53))) AS FloatSum,
+    SUM(t.Notional_USD) AS DecimalSum
+FROM dbo.FRNT_EUC_FRNT_EUC_SFRecollector_ProcessSummit_tbl_Summit_MBAR_ME t;
