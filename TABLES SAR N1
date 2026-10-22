@@ -1,9 +1,25 @@
+WITH SourceData AS (
+    SELECT
+        CONCAT(
+            Actual_Account, '-',
+            Ccy, '-',
+            Actual_Affiliate, '-',
+            CASE
+                WHEN GL = 'FS' THEN CONCAT(PMF, '-')
+                WHEN GL = 'FSBD' THEN CONCAT(PMF, '-')
+                ELSE ''
+            END,
+            'SU'
+        ) AS Account,
+
+        Actual_USD
+    FROM dbo.FRNT_FUC_FRNT_FUC_STREcollector_ProcessSummit_tbl_tbl_Summit_MBAR
+)
 SELECT
     Account,
-    COUNT(*) AS RowCount,
-    SUM(Actual_USD) AS ActualUSD,
-    SUM(Notional_USD) AS NotionalUSD,
-    ROUND(SUM(Notional_USD), 2) AS RoundedNotionalUSD
-FROM dbo.FRNT_FUC_FRNT_FUC_STREcollector_ProcessSummit_tbl_tbl_Summit_MBAR
-WHERE Account = 'YOUR_ACCOUNT'
+    COUNT(*) AS RecordCount,
+    SUM(Actual_USD) AS DecimalSum,
+    SUM(CAST(Actual_USD AS FLOAT)) AS FloatSum
+FROM SourceData
+WHERE Account = 'YOUR_MISMATCHED_ACCOUNT'
 GROUP BY Account;
