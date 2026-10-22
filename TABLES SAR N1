@@ -34,3 +34,13 @@ SELECT
     CAST(AmountUSD AS DECIMAL(38,10)) AS AmountUSD_Decimal
 FROM dbo.YourViewName
 WHERE Account = 'YOUR_ACCOUNT';
+
+**********************
+
+SELECT
+    Account,
+    Amount,
+    AmountUSD,
+    CAST(AmountUSD AS DECIMAL(38,18)) AS DecimalValue
+FROM dbo.FRNT_EUC_FRNT_EUC_SFRecollector_ProcessSummit_vw_quniSummit_MBAR_Today_Bal_Version2
+WHERE Account = 'FIRST_MISMATCHED_ACCOUNT';
