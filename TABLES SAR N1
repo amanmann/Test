@@ -44,3 +44,33 @@ SELECT
     CAST(AmountUSD AS DECIMAL(38,18)) AS DecimalValue
 FROM dbo.FRNT_EUC_FRNT_EUC_SFRecollector_ProcessSummit_vw_quniSummit_MBAR_Today_Bal_Version2
 WHERE Account = 'FIRST_MISMATCHED_ACCOUNT';
+
+**********************
+
+private static String getExportValue(
+        ResultSet rs,
+        FieldSpec field
+) throws SQLException {
+
+    String value = rs.getString(field.getFieldName());
+
+    if (value == null) {
+        return "";
+    }
+
+    if ("PLAIN".equalsIgnoreCase(
+            field.getNumericFormat())) {
+
+        try {
+            return new BigDecimal(value)
+                    .toPlainString();
+        } catch (NumberFormatException ex) {
+            throw new SQLException(
+                    "Invalid numeric value for column "
+                    + field.getFieldName()
+                    + ": " + value, ex);
+        }
+    }
+
+    return value;
+}
