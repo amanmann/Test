@@ -23,3 +23,14 @@ SELECT
 FROM SourceData
 WHERE Account = 'YOUR_MISMATCHED_ACCOUNT'
 GROUP BY Account;
+
+*******************
+
+
+SELECT
+    Account,
+    AmountUSD,
+    CAST(AmountUSD AS FLOAT) AS AmountUSD_Float,
+    CAST(AmountUSD AS DECIMAL(38,10)) AS AmountUSD_Decimal
+FROM dbo.YourViewName
+WHERE Account = 'YOUR_ACCOUNT';
